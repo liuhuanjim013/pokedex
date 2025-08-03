@@ -1,0 +1,61 @@
+# YOLOv3 Data Configuration for Pokemon Classifier
+
+# Dataset paths
+data:
+  raw_dir: "data/raw"
+  processed_dir: "data/processed/yolov3"
+  splits_dir: "data/splits/yolov3"
+  
+  # Original datasets
+  kaggle_dataset: "data/raw/kaggle_pokemon"
+  gen1_3_dataset: "data/raw/gen1_3_pokemon"  # Your 900MB dataset
+  
+  # Processed data
+  images_dir: "data/processed/yolov3/images"
+  metadata_dir: "data/processed/yolov3/metadata"
+  augmented_dir: "data/processed/yolov3/augmented"
+
+# Data processing
+processing:
+  image_size: 416  # YOLOv3 standard size
+  batch_size: 16
+  num_workers: 4
+  
+  # YOLOv3-specific augmentation settings
+  augmentation:
+    rotation: 15
+    brightness: 0.2
+    contrast: 0.2
+    saturation: 0.2
+    hue: 0.1
+    # YOLOv3 specific augmentations
+    mosaic: 1.0
+    mixup: 0.0
+    scale: 0.5
+    translate: 0.1
+    shear: 2.0
+    perspective: 0.0
+    flipud: 0.0
+    fliplr: 0.5
+
+# Dataset splits
+splits:
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+  
+# Pokemon generations
+generations:
+  baseline: [1, 2, 3]  # 386 Pokemon
+  full: [1, 2, 3, 4, 5, 6, 7, 8, 9]  # 1025 Pokemon
+
+# Hugging Face settings
+huggingface:
+  dataset_name: "your-username/pokemon-yolov3-gen1-3"
+  model_name: "your-username/pokemon-classifier-yolov3"
+
+# YOLOv3 specific settings
+yolov3:
+  anchors: [[10,13], [16,30], [33,23], [30,61], [62,45], [59,119], [116,90], [156,198], [373,326]]
+  strides: [8, 16, 32]
+  num_classes: 386  # Start with baseline 

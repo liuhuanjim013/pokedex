@@ -1,0 +1,77 @@
+# CLIP Training Configuration for Pokemon Classifier
+
+# Model settings
+model:
+  name: "clip"
+  classes: 386  # Start with 1-3 generations
+  img_size: 224
+  pretrained: true
+  backbone: "vit-base-patch32"
+
+# Training hyperparameters
+training:
+  epochs: 50
+  batch_size: 32
+  learning_rate: 1e-5  # CLIP uses very low learning rate
+  weight_decay: 0.01
+  
+  # CLIP-specific learning rate scheduling
+  scheduler:
+    type: "cosine"
+    warmup_epochs: 2
+    lr_schedule: "cosine"
+    
+  # Early stopping
+  early_stopping:
+    patience: 15
+    min_delta: 0.001
+
+# Data settings
+data:
+  train_split: 0.7
+  val_split: 0.15
+  test_split: 0.15
+  
+  # CLIP-specific augmentation
+  augmentation:
+    hsv_h: 0.015
+    hsv_s: 0.7
+    hsv_v: 0.4
+    degrees: 5.0
+    translate: 0.1
+    scale: 0.8
+    shear: 0.0
+    perspective: 0.0
+    flipud: 0.0
+    fliplr: 0.5
+    mosaic: 0.0  # CLIP doesn't use mosaic
+    mixup: 0.0
+
+# Experiment tracking
+wandb:
+  project: "pokemon-classifier"
+  name: "clip-baseline"
+  tags: ["clip", "vlm", "baseline", "gen1-3"]
+
+# Model saving
+checkpointing:
+  save_freq: 5  # Save every 5 epochs
+  save_best: true
+  max_checkpoints: 3
+
+# Hardware settings
+hardware:
+  device: "auto"
+  num_workers: 4
+  pin_memory: true
+
+# CLIP specific settings
+clip:
+  model_name: "openai/clip-vit-base-patch32"
+  text_prompts: ["A photo of {pokemon_name}", "A picture of {pokemon_name}", "An image of {pokemon_name}"]
+  max_text_length: 77
+  temperature: 0.07
+  contrastive_loss: true
+  logit_scale: 2.6592
+  text_encoder_frozen: false
+  image_encoder_frozen: false 

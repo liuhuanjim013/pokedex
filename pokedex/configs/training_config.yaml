@@ -1,0 +1,64 @@
+# Training Configuration for Pokemon Classifier
+
+# Model settings
+model:
+  name: "yolov3"
+  classes: 386  # Start with 1-3 generations
+  img_size: 416
+  pretrained: true
+
+# Training hyperparameters
+training:
+  epochs: 100
+  batch_size: 16
+  learning_rate: 0.001
+  weight_decay: 0.0005
+  
+  # Learning rate scheduling
+  scheduler:
+    type: "cosine"
+    warmup_epochs: 5
+    
+  # Early stopping
+  early_stopping:
+    patience: 10
+    min_delta: 0.001
+
+# Data settings
+data:
+  train_split: 0.7
+  val_split: 0.15
+  test_split: 0.15
+  
+  # Augmentation
+  augmentation:
+    hsv_h: 0.015
+    hsv_s: 0.7
+    hsv_v: 0.4
+    degrees: 10.0
+    translate: 0.1
+    scale: 0.5
+    shear: 2.0
+    perspective: 0.0
+    flipud: 0.0
+    fliplr: 0.5
+    mosaic: 1.0
+    mixup: 0.0
+
+# Experiment tracking
+wandb:
+  project: "pokemon-classifier"
+  name: "yolov3-baseline"
+  tags: ["yolov3", "baseline", "gen1-3"]
+
+# Model saving
+checkpointing:
+  save_freq: 10  # Save every 10 epochs
+  save_best: true
+  max_checkpoints: 5
+
+# Hardware settings
+hardware:
+  device: "auto"  # auto, cpu, cuda
+  num_workers: 4
+  pin_memory: true 

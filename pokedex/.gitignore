@@ -1,0 +1,43 @@
+# Data files (too large for GitHub)
+data/
+models/checkpoints/
+models/final/
+
+# Environment files
+.env
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Jupyter notebook outputs
+.ipynb_checkpoints/
+
+# W&B files
+wandb/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Model files
+*.pt
+*.pth
+*.onnx
+*.tflite
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/ 

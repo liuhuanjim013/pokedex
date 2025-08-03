@@ -1,0 +1,58 @@
+# CLIP Data Configuration for Pokemon Classifier
+
+# Dataset paths
+data:
+  raw_dir: "data/raw"
+  processed_dir: "data/processed/clip"
+  splits_dir: "data/splits/clip"
+  
+  # Original datasets
+  kaggle_dataset: "data/raw/kaggle_pokemon"
+  gen1_3_dataset: "data/raw/gen1_3_pokemon"
+  
+  # Processed data
+  images_dir: "data/processed/clip/images"
+  metadata_dir: "data/processed/clip/metadata"
+  augmented_dir: "data/processed/clip/augmented"
+
+# Data processing
+processing:
+  image_size: 224  # CLIP standard size
+  batch_size: 32
+  num_workers: 4
+  
+  # CLIP-specific augmentation settings
+  augmentation:
+    rotation: 10
+    brightness: 0.1
+    contrast: 0.1
+    saturation: 0.1
+    hue: 0.05
+    # CLIP uses simpler augmentations
+    scale: 0.8
+    translate: 0.1
+    shear: 0.0
+    perspective: 0.0
+
+# Dataset splits
+splits:
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+  
+# Pokemon generations
+generations:
+  baseline: [1, 2, 3]  # 386 Pokemon
+  full: [1, 2, 3, 4, 5, 6, 7, 8, 9]  # 1025 Pokemon
+
+# Hugging Face settings
+huggingface:
+  dataset_name: "your-username/pokemon-clip-gen1-3"
+  model_name: "your-username/pokemon-classifier-clip"
+
+# CLIP specific settings
+clip:
+  model_name: "openai/clip-vit-base-patch32"
+  text_prompts: ["A photo of {pokemon_name}", "A picture of {pokemon_name}", "An image of {pokemon_name}"]
+  max_text_length: 77
+  temperature: 0.07 
