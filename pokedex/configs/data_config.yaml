@@ -7,7 +7,7 @@ data:
   splits_dir: "data/splits"
   
   # Original datasets
-  gen1_3_dataset: "data/raw/gen1_3_pokemon"  # Your 900MB dataset
+  all_pokemon_dataset: "data/raw/all_pokemon"  # All 1025 Pokemon dataset
   
   # Processed data
   images_dir: "data/processed/images"
@@ -38,11 +38,11 @@ splits:
   
 # Pokemon generations
 generations:
-  baseline: [1, 2, 3]  # 386 Pokemon
-  full: [1, 2, 3, 4, 5, 6, 7, 8, 9]  # 1025 Pokemon
+  original_blog: [1, 2, 3, 4, 5, 6, 7, 8, 9]  # 1025 Pokemon (original blog used all)
+  full: [1, 2, 3, 4, 5, 6, 7, 8, 9]  # 1025 Pokemon (current focus)
 
 # Hugging Face settings
 huggingface:
-  yolo_dataset_name: "your-username/pokemon-yolo-gen1-3"
-  clip_dataset_name: "your-username/pokemon-clip-gen1-3"
-  smolvm_dataset_name: "your-username/pokemon-smolvm-gen1-3" 
+  yolo_dataset_name: "liuhuanjim013/pokemon-yolo-1025"
+  clip_dataset_name: "liuhuanjim013/pokemon-clip-1025"
+  smolvm_dataset_name: "liuhuanjim013/pokemon-smolvm-1025" 

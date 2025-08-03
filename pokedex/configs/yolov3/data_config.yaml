@@ -8,7 +8,7 @@ data:
   
   # Original datasets
   kaggle_dataset: "data/raw/kaggle_pokemon"
-  gen1_3_dataset: "data/raw/gen1_3_pokemon"  # Your 900MB dataset
+  all_pokemon_dataset: "data/raw/all_pokemon"  # All 1025 Pokemon dataset
   
   # Processed data
   images_dir: "data/processed/yolov3/images"
@@ -46,16 +46,16 @@ splits:
   
 # Pokemon generations
 generations:
-  baseline: [1, 2, 3]  # 386 Pokemon
-  full: [1, 2, 3, 4, 5, 6, 7, 8, 9]  # 1025 Pokemon
+  original_blog: [1, 2, 3, 4, 5, 6, 7, 8, 9]  # 1025 Pokemon (original blog used all)
+  full: [1, 2, 3, 4, 5, 6, 7, 8, 9]  # 1025 Pokemon (current focus)
 
 # Hugging Face settings
 huggingface:
-  dataset_name: "your-username/pokemon-yolov3-gen1-3"
-  model_name: "your-username/pokemon-classifier-yolov3"
+  dataset_name: "liuhuanjim013/pokemon-yolov3-1025"
+  model_name: "liuhuanjim013/pokemon-classifier-yolov3-1025"
 
 # YOLOv3 specific settings
 yolov3:
   anchors: [[10,13], [16,30], [33,23], [30,61], [62,45], [59,119], [116,90], [156,198], [373,326]]
   strides: [8, 16, 32]
-  num_classes: 386  # Start with baseline 
+  num_classes: 1025  # All Pokemon classes (original blog used all) 
