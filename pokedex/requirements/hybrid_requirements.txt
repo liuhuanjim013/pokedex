@@ -1,0 +1,33 @@
+# Hybrid requirements
+# Combines YOLO and VLM dependencies for hybrid approaches
+
+# Include base requirements
+-r ../requirements.txt
+
+# YOLO dependencies
+ultralytics>=8.0.0
+torch>=1.12.0
+torchvision>=0.13.0
+albumentations>=1.3.0
+pycocotools>=2.0.6
+
+# VLM dependencies
+transformers>=4.20.0
+accelerate>=0.20.0
+bitsandbytes>=0.39.0
+ftfy>=6.1.0
+regex>=2022.1.18
+sentencepiece>=0.1.96
+
+# Deployment
+onnx>=1.12.0
+onnxruntime>=1.12.0
+
+# Additional dependencies
+opencv-python>=4.5.0
+Pillow>=8.3.0
+PyYAML>=6.0
+requests>=2.28.0
+tqdm>=4.62.0
+matplotlib>=3.5.0
+seaborn>=0.11.0 

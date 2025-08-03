@@ -1,0 +1,79 @@
+# Reproduction Config - Exact Original Blog Parameters
+# Based on: https://www.cnblogs.com/xianmasamasa/p/18995912
+# Goal: Reproduce original results exactly, then improve
+
+# Original blog reproduction parameters
+model:
+  name: "yolov3"
+  classes: 386  # 1-3 generations
+  img_size: 416
+  pretrained: true
+
+# Original training parameters (exact reproduction)
+training:
+  epochs: 100
+  batch_size: 16
+  learning_rate: 0.001
+  weight_decay: 0.0005
+  
+  # Original author used Mx_yolo 3.0.0 binary
+  # We'll use ultralytics but keep same parameters
+  scheduler:
+    type: "step"  # Original likely used step decay
+    warmup_epochs: 0  # No warmup in original
+    
+  # No early stopping in original
+  early_stopping:
+    patience: 999  # Effectively disabled
+    min_delta: 0.0
+
+# Original data settings
+data:
+  train_split: 0.7
+  val_split: 0.15
+  test_split: 0.15
+  
+  # Original augmentation (likely minimal)
+  augmentation:
+    hsv_h: 0.015
+    hsv_s: 0.7
+    hsv_v: 0.4
+    degrees: 0.0  # No rotation in original
+    translate: 0.0  # No translation
+    scale: 0.5
+    shear: 0.0  # No shear
+    perspective: 0.0
+    flipud: 0.0
+    fliplr: 0.5  # Only horizontal flip
+    mosaic: 0.0  # No mosaic in original
+    mixup: 0.0  # No mixup in original
+
+# Original hardware constraints
+hardware:
+  device: "cpu"  # Original used RISC-V CPU
+  memory_limit: "50MB"
+  quantization: "none"  # No quantization in original
+
+# Experiment tracking
+wandb:
+  project: "pokemon-classifier"
+  name: "yolov3-original-reproduction"
+  tags: ["yolov3", "reproduction", "original", "gen1-3"]
+
+# Model saving
+checkpointing:
+  save_freq: 10
+  save_best: true
+  max_checkpoints: 5
+
+# Original limitations (for reference)
+original_limitations:
+  - "Poor performance in low light"
+  - "Sensitive to object size"
+  - "Background interference"
+  - "Limited recognition accuracy"
+  - "Dataset quality issues"
+  - "Used Mx_yolo 3.0.0 binary (proprietary)"
+  - "No advanced augmentation"
+  - "No learning rate scheduling"
+  - "No early stopping" 

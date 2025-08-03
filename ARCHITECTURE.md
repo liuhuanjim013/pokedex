@@ -85,21 +85,23 @@
 #### Directory Structure
 ```
 pokedex/
-├── data/                          # Local data storage
+├── data/                          # Local data storage (gitignored)
 │   ├── raw/                      # Raw downloaded datasets
-│   │   ├── kaggle_pokemon/       # Original Kaggle dataset
-│   │   ├── tcg_cards/           # Pokemon card images
-│   │   ├── 3d_renders/          # 3D model renders
-│   │   └── real_world/          # Community photos, toys
-│   ├── processed/                # Preprocessed data (experiment-specific)
-│   │   ├── yolov3/              # YOLOv3 processed data
-│   │   ├── yolov8/              # YOLOv8 processed data
-│   │   ├── clip/                # CLIP processed data
-│   │   └── smolvm/              # SMoLVM processed data
-│   └── splits/                  # Train/val/test splits (experiment-specific)
-│       ├── yolov3/
-│       ├── yolov8/
-│       └── clip/
+│   │   └── all_pokemon/         # All Pokemon data (1025 folders)
+│   │       ├── 0001/            # Bulbasaur - all images (Kaggle + web-scraped)
+│   │       ├── 0002/            # Ivysaur - all images (Kaggle + web-scraped)
+│   │       ├── ...              # Pokemon 003-0151 (Kaggle + web-scraped)
+│   │       ├── 0152/            # Chikorita - web-scraped only
+│   │       ├── ...              # Pokemon 0153-1025 (web-scraped only)
+│   │       └── 1025/            # Last Pokemon - web-scraped only
+│   ├── processed/                # Shared preprocessed data (gitignored)
+│   │   ├── images/              # Resized images for all models
+│   │   ├── metadata/            # Dataset info, Pokemon mappings
+│   │   └── yolo_dataset/        # YOLO format dataset
+│   └── splits/                  # Train/val/test splits (gitignored)
+│       ├── train/
+│       ├── validation/
+│       └── test/
 ├── models/                       # Model storage
 │   ├── checkpoints/             # Training checkpoints (experiment-specific)
 │   │   ├── yolov3/
@@ -143,7 +145,9 @@ pokedex/
 ├── configs/                     # Configuration files (experiment-specific)
 │   ├── yolov3/                 # YOLOv3 configurations
 │   │   ├── data_config.yaml
-│   │   └── training_config.yaml
+│   │   ├── training_config.yaml
+│   │   ├── reproduction_config.yaml
+│   │   └── improvement_config.yaml
 │   ├── yolov8/                 # YOLOv8 configurations
 │   ├── clip/                   # CLIP configurations
 │   ├── smolvm/                 # SMoLVM configurations
@@ -157,6 +161,12 @@ pokedex/
 │   │   └── setup_smolvm_experiment.py
 │   ├── hybrid/                 # Hybrid-specific scripts
 │   └── common/                 # Common utilities
+│       ├── setup_environment.py
+│       ├── dataset_analysis.py
+│       ├── organize_raw_data.py
+│       ├── data_processor.py
+│       ├── experiment_manager.py
+│       └── upload_dataset.py
 ├── requirements/                # Dependencies (experiment-specific)
 │   ├── yolo_requirements.txt
 │   ├── vlm_requirements.txt
@@ -172,29 +182,73 @@ pokedex/
 ```
 
 #### Dataset Sources & Organization
-1. **Primary Dataset**: Kaggle Pokemon dataset (11945 images, 1st gen)
+1. **Complete Dataset**: All 1025 Pokemon (generations 1-9)
+   - **Pokemon 001-151**: Kaggle dataset + additional web-scraped images
+   - **Pokemon 152-1025**: Web-scraped from Bing search
+   - **Organization**: Each Pokemon has its own folder (0001-1025) containing all available images
 2. **Hugging Face Integration**:
    - Upload processed dataset to Hugging Face Hub
    - Create dataset card with metadata and usage examples
    - Enable easy access for training and evaluation
    - Version control for dataset updates
-3. **Additional Sources**:
-   - Pokemon card images from TCG databases
-   - 3D model renders for consistent lighting
-   - Real-world photos from Pokemon GO community
-   - Toy and figurine images
-   - Screenshots from Pokemon games
+3. **Data Quality**:
+   - Mixed image quality across all Pokemon
+   - Variable number of images per Pokemon
+   - May contain duplicates or irrelevant images
+   - Requires quality filtering and standardization
+
+#### Data Analysis Results (COMPLETED)
+**Dataset Statistics:**
+- **Total Pokemon**: 1025
+- **Total Images**: 128,768
+- **Average images per Pokemon**: 125.6
+- **Image count range**: 37 - 284
+- **Quality Assessment**: 100% validity rate (all images checked)
+- **Class Distribution**: Good balance with reasonable variation
+
+**Data Splitting Strategy (UPDATED):**
+- **Method**: Within-class splitting (70/15/15 per Pokemon)
+- **Rationale**: Standard approach for multi-class classification
+- **Benefits**: All Pokemon classes seen during training
+- **Implementation**: Each Pokemon's images split into train/val/test
+- **Result**: All 1025 Pokemon present in all splits
+
+**Quality Assessment (COMPLETED):**
+- **Images Checked**: All 128,768 images across all 1025 Pokemon
+- **Valid Images**: 128,768 (100% validity rate)
+- **Corrupted Images**: 0
+- **Format Distribution**: Mixed (JPG, PNG, etc.)
+- **Size Distribution**: Variable, ready for standardization
 
 #### Data Workflow
 ```python
-# Data processing pipeline
-raw_data/ → preprocessing.py → processed_data/ → upload_to_hf.py → Hugging Face Hub
+# Shared data processing pipeline
+raw_data/ → preprocessing.py → processed_data/ → model_specific_format() → Hugging Face Hub
+
+# Step 1: Process raw data once (shared across all models)
+raw_data/all_pokemon/ → preprocessing.py → processed_data/images/
+
+# Step 2: Create model-specific formats
+processed_data/images/ → create_yolo_dataset() → yolo_dataset/
+processed_data/images/ → create_clip_dataset() → clip_dataset/
+processed_data/images/ → create_smolvm_dataset() → smolvm_dataset/
+
+# Step 3: Upload to Hugging Face (not GitHub)
+yolo_dataset/ → upload_to_hf.py → Hugging Face Hub
+clip_dataset/ → upload_to_hf.py → Hugging Face Hub
 ```
 
 #### Version Control Strategy
-- **GitHub**: Code, configs, documentation, workflows
+- **GitHub**: Code, configs, documentation, workflows (NO DATA)
 - **Hugging Face**: Datasets, model checkpoints, experiment results
 - **W&B**: Training logs, metrics, model comparisons
+- **Local**: Raw and processed data (gitignored)
+
+#### Data Security & Storage
+- **Raw Data**: Stored locally, never uploaded to GitHub
+- **Processed Data**: Stored locally, uploaded to Hugging Face for Colab access
+- **Gitignore**: All data directories and image files excluded from Git
+- **Backup**: Raw data backed up separately (not in Git)
 
 #### Data Augmentation Strategy
 - **Geometric**: Rotation, scaling, perspective transforms
@@ -338,7 +392,57 @@ class PokemonClassifier:
 - **Model Updates**: OTA updates for improved models
 - **Analytics**: Collect usage data for model improvement
 
-### 8. Implementation Roadmap & Workflows
+### 8. Original Blog Reproduction & Improvement Plan
+
+#### Original Blog Analysis
+**Source**: https://www.cnblogs.com/xianmasamasa/p/18995912  
+**Author**: 弦masamasa  
+**Model**: Mx_yolo 3.0.0 binary  
+**Classes**: 386 (generations 1-3)  
+**Hardware**: Sipeed Maix Bit RISC-V  
+
+#### Original Limitations Identified
+- Poor performance in low light conditions
+- Sensitive to object size variations
+- Background interference issues
+- Limited recognition accuracy
+- Dataset quality problems ("garbage" quality)
+- Used proprietary Mx_yolo 3.0.0 binary
+- No advanced augmentation techniques
+- No learning rate scheduling
+- No early stopping mechanisms
+
+#### Reproduction Strategy
+1. **Exact Reproduction** (`reproduction_config.yaml`):
+   - Use same training parameters as original
+   - Minimal augmentation (only horizontal flip)
+   - No learning rate scheduling
+   - No early stopping
+   - CPU training to match RISC-V constraints
+
+2. **Improvement Strategy** (`improvement_config.yaml`):
+   - Enhanced data augmentation (rotation, shear, mosaic, mixup)
+   - Cosine learning rate scheduling with warmup
+   - Early stopping to prevent overfitting
+   - Better data quality control
+   - INT8 quantization for IoT deployment
+   - Advanced experiment tracking
+
+#### Expected Improvements
+- Better performance in varying lighting conditions
+- Reduced sensitivity to object size and background
+- Higher overall recognition accuracy
+- More robust real-world performance
+- Optimized for Sipeed Maix Bit deployment
+
+#### Deliverables for Original Author
+- Reproduced model with exact original parameters
+- Improved model with enhanced training
+- Detailed comparison report
+- Testing instructions for Sipeed Maix Bit
+- Performance metrics and improvement analysis
+
+### 9. Implementation Roadmap & Workflows
 
 #### Development Workflow
 ```mermaid
@@ -357,6 +461,15 @@ graph TD
 - [ ] Download and process Pokemon dataset locally
 - [ ] Upload processed dataset to Hugging Face Hub
 - [ ] Set up Weights & Biases project tracking
+- [ ] **Original Blog Reproduction**:
+  - [ ] Reproduce exact original YOLOv3 training parameters
+  - [ ] Train with original limitations (minimal augmentation, no scheduling)
+  - [ ] Document original performance baseline
+- [ ] **Improvement Plan**:
+  - [ ] Enhanced data augmentation to address lighting/size sensitivity
+  - [ ] Improved learning rate scheduling with cosine annealing
+  - [ ] Early stopping and better regularization
+  - [ ] IoT optimization for Sipeed Maix Bit
 - [ ] Test experiment-specific configurations:
   - [ ] YOLOv3 baseline (386 classes)
   - [ ] YOLOv8 comparison
@@ -369,6 +482,20 @@ graph TD
 - [ ] Create baseline models for comparison
 
 #### Phase 2: Model Development (Weeks 3-6)
+- [ ] **Original Blog Reproduction**:
+  - [ ] Train YOLOv3 with exact original parameters (`reproduction_config.yaml`)
+  - [ ] Document original limitations and performance
+  - [ ] Create baseline for comparison
+- [ ] **Improvement Implementation**:
+  - [ ] Train YOLOv3 with enhanced parameters (`improvement_config.yaml`)
+  - [ ] Implement advanced augmentation strategies
+  - [ ] Add cosine learning rate scheduling
+  - [ ] Implement early stopping and regularization
+  - [ ] Optimize for IoT deployment (INT8 quantization)
+- [ ] **Performance Comparison**:
+  - [ ] Compare reproduction vs improved results
+  - [ ] Create detailed improvement report
+  - [ ] Prepare model for original author testing
 - [ ] Implement experiment-specific training pipelines:
   - [ ] YOLOv3 baseline training (386 classes)
   - [ ] YOLOv8 training with comparison

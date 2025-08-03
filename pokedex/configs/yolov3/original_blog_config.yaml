@@ -1,0 +1,111 @@
+# Original Blog Article YOLOv3 Configuration
+# Based on: https://www.cnblogs.com/xianmasamasa/p/18995912
+
+# Original author's training parameters from the blog
+original_blog:
+  # Model used: Mx_yolo 3.0.0 binary (we'll replace with ultralytics)
+  model: "yolov3"
+  classes: 386  # 1-3 generations
+  img_size: 416
+  pretrained: true
+  
+  # Training parameters from blog
+  training:
+    epochs: 100
+    batch_size: 16
+    learning_rate: 0.001
+    weight_decay: 0.0005
+    
+    # Original author's notes:
+    # - "识别的局限性太大了，很多时候识别不出来"
+    # - "识别受光线、目标大小因素、背景等因素影响很大"
+    # - Dataset was described as "garbage" with poor quality images
+    
+  # Hardware used: Sipeed Maix Bit RISC-V
+  hardware:
+    device: "cpu"  # Original used RISC-V CPU
+    memory_limit: "50MB"  # IoT constraints
+    
+  # Original dataset structure
+  dataset:
+    source: "Mixed from various Pokemon sites"
+    quality: "Poor (described as garbage)"
+    size: "900MB"
+    structure: "Numbered directories (0001-0386)"
+    
+  # Original limitations noted
+  limitations:
+    - "Poor performance in low light"
+    - "Sensitive to object size"
+    - "Background interference"
+    - "Limited recognition accuracy"
+    - "Dataset quality issues"
+
+# Our reproduction parameters (improved)
+reproduction:
+  model:
+    name: "yolov3"
+    classes: 386
+    img_size: 416
+    pretrained: true
+    
+  training:
+    epochs: 100
+    batch_size: 16
+    learning_rate: 0.001
+    weight_decay: 0.0005
+    
+    # Improved augmentation to address original limitations
+    augmentation:
+      hsv_h: 0.015
+      hsv_s: 0.7
+      hsv_v: 0.4
+      degrees: 10.0
+      translate: 0.1
+      scale: 0.5
+      shear: 2.0
+      perspective: 0.0
+      flipud: 0.0
+      fliplr: 0.5
+      mosaic: 1.0
+      mixup: 0.0
+      
+    # Improved learning rate scheduling
+    scheduler:
+      type: "cosine"
+      warmup_epochs: 5
+      
+    # Early stopping to prevent overfitting
+    early_stopping:
+      patience: 10
+      min_delta: 0.001
+      
+  # Data improvements
+  data:
+    # Better data quality control
+    quality_threshold: 0.8
+    min_image_size: 100
+    max_image_size: 2000
+    
+    # Improved splits
+    train_ratio: 0.7
+    val_ratio: 0.15
+    test_ratio: 0.15
+    
+  # Hardware optimization for IoT
+  hardware:
+    device: "auto"
+    quantization: "int8"
+    model_size_limit: "50MB"
+    
+  # Experiment tracking
+  wandb:
+    project: "pokemon-classifier"
+    name: "yolov3-reproduction-improved"
+    tags: ["yolov3", "reproduction", "improved", "gen1-3"]
+    
+  # Model saving
+  checkpointing:
+    save_freq: 10
+    save_best: true
+    max_checkpoints: 5 

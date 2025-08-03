@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Setup script for YOLOv3 Pokemon classifier experiment.
+Setup script for Pokemon classifier YOLOv3 experiments.
 """
 
 import os
@@ -15,11 +15,11 @@ import sys
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class YOLOv3ExperimentSetup:
-    """Setup environment and data for YOLOv3 Pokemon classifier experiment."""
+class PokemonExperimentSetup:
+    """Setup environment and data for Pokemon classifier experiments."""
     
-    def __init__(self, config_path: str = "configs/yolov3/data_config.yaml"):
-        """Initialize setup with YOLOv3-specific configuration."""
+    def __init__(self, config_path: str = "configs/data_config.yaml"):
+        """Initialize setup with configuration."""
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
         
@@ -27,33 +27,36 @@ class YOLOv3ExperimentSetup:
         logger.info(f"Project root: {self.project_root}")
     
     def setup_environment(self):
-        """Set up Python environment and install YOLO dependencies."""
-        logger.info("Setting up YOLO environment...")
+        """Set up Python environment and install dependencies."""
+        logger.info("Setting up Python environment...")
         
-        # Install YOLO-specific dependencies
+        # Install dependencies
         try:
-            subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements/yolo_requirements.txt"], 
+            subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], 
                          check=True, capture_output=True)
-            logger.info("YOLO dependencies installed successfully")
+            logger.info("Dependencies installed successfully")
         except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to install YOLO dependencies: {e}")
+            logger.error(f"Failed to install dependencies: {e}")
             return False
         
         return True
     
     def setup_directories(self):
-        """Create YOLOv3-specific directories."""
-        logger.info("Creating YOLOv3 project directories...")
+        """Create necessary directories."""
+        logger.info("Creating project directories...")
         
         directories = [
             "data/raw",
-            "data/processed/yolov3",
-            "data/splits/yolov3",
-            "models/checkpoints/yolov3",
-            "models/final/yolov3",
-            "models/compressed/yolov3",
-            "notebooks/yolo_experiments",
-            "logs/yolov3"
+            "data/processed",
+            "data/splits",
+            "models/checkpoints",
+            "models/final",
+            "models/compressed",
+            "models/configs",
+            "notebooks/exploration",
+            "notebooks/experiments",
+            "notebooks/deployment",
+            "logs"
         ]
         
         for directory in directories:
@@ -62,34 +65,34 @@ class YOLOv3ExperimentSetup:
     
     def process_dataset(self, dataset_path: str):
         """
-        Process the 900MB gen1-3 dataset for YOLOv3.
+        Process the 900MB gen1-3 dataset.
         
         Args:
             dataset_path: Path to the downloaded dataset
         """
-        logger.info(f"Processing dataset for YOLOv3: {dataset_path}")
+        logger.info(f"Processing dataset: {dataset_path}")
         
-        # Run YOLOv3-specific preprocessing
+        # Run preprocessing
         cmd = [
             sys.executable, "src/data/preprocessing.py",
             "--dataset_path", dataset_path,
-            "--config", "configs/yolov3/data_config.yaml",
+            "--config", "configs/data_config.yaml",
             "--create_yolo_dataset"
         ]
         
         try:
             result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-            logger.info("YOLOv3 dataset processing completed successfully")
+            logger.info("Dataset processing completed successfully")
             logger.info(result.stdout)
             return True
         except subprocess.CalledProcessError as e:
-            logger.error(f"YOLOv3 dataset processing failed: {e}")
+            logger.error(f"Dataset processing failed: {e}")
             logger.error(e.stderr)
             return False
     
-    def create_data_yaml(self, dataset_path: str = "data/processed/yolov3/yolo_dataset"):
-        """Create data.yaml file for YOLOv3 training."""
-        from src.training.yolo.yolov3_trainer import create_data_yaml
+    def create_data_yaml(self, dataset_path: str = "data/processed/yolo_dataset"):
+        """Create data.yaml file for YOLO training."""
+        from src.training.yolo_trainer import create_data_yaml
         
         dataset_path = Path(dataset_path)
         if not dataset_path.exists():
@@ -106,19 +109,19 @@ class YOLOv3ExperimentSetup:
             num_classes = len(f.readlines())
         
         # Create data.yaml
-        output_path = "data/processed/yolov3/data.yaml"
+        output_path = "data/processed/data.yaml"
         create_data_yaml(str(dataset_path), output_path, num_classes)
         
-        logger.info(f"Created YOLOv3 data.yaml with {num_classes} classes")
+        logger.info(f"Created data.yaml with {num_classes} classes")
         return True
     
     def upload_to_huggingface(self, dataset_name: str, token: str = None):
         """Upload processed dataset to Hugging Face."""
-        logger.info(f"Uploading YOLOv3 dataset to Hugging Face: {dataset_name}")
+        logger.info(f"Uploading dataset to Hugging Face: {dataset_name}")
         
         cmd = [
             sys.executable, "scripts/upload_dataset.py",
-            "--processed_dir", "data/processed/yolov3/yolo_dataset",
+            "--processed_dir", "data/processed/yolo_dataset",
             "--dataset_name", dataset_name,
             "--yolo_format"
         ]
@@ -128,30 +131,30 @@ class YOLOv3ExperimentSetup:
         
         try:
             result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-            logger.info("YOLOv3 dataset uploaded successfully")
+            logger.info("Dataset uploaded successfully")
             logger.info(result.stdout)
             return True
         except subprocess.CalledProcessError as e:
-            logger.error(f"YOLOv3 upload failed: {e}")
+            logger.error(f"Upload failed: {e}")
             logger.error(e.stderr)
             return False
     
     def setup_wandb(self):
-        """Set up Weights & Biases for YOLOv3 experiment."""
-        logger.info("Setting up Weights & Biases for YOLOv3...")
+        """Set up Weights & Biases."""
+        logger.info("Setting up Weights & Biases...")
         
         try:
             import wandb
             # This will prompt for login if not already logged in
             wandb.login()
-            logger.info("W&B setup completed for YOLOv3")
+            logger.info("W&B setup completed")
             return True
         except Exception as e:
             logger.error(f"W&B setup failed: {e}")
             return False
 
 def main():
-    parser = argparse.ArgumentParser(description="Setup YOLOv3 Pokemon classifier experiment")
+    parser = argparse.ArgumentParser(description="Setup Pokemon classifier experiment")
     parser.add_argument("--dataset_path", help="Path to raw dataset")
     parser.add_argument("--dataset_name", help="Hugging Face dataset name")
     parser.add_argument("--hf_token", help="Hugging Face token")
@@ -160,11 +163,11 @@ def main():
     args = parser.parse_args()
     
     # Initialize setup
-    setup = YOLOv3ExperimentSetup()
+    setup = PokemonExperimentSetup()
     
     # Setup environment
     if not setup.setup_environment():
-        logger.error("YOLOv3 environment setup failed")
+        logger.error("Environment setup failed")
         return
     
     # Create directories
@@ -176,23 +179,23 @@ def main():
     # Process dataset if provided
     if args.dataset_path:
         if not setup.process_dataset(args.dataset_path):
-            logger.error("YOLOv3 dataset processing failed")
+            logger.error("Dataset processing failed")
             return
         
         # Create data.yaml
         if not setup.create_data_yaml():
-            logger.error("Failed to create YOLOv3 data.yaml")
+            logger.error("Failed to create data.yaml")
             return
         
         # Upload to Hugging Face if requested
         if not args.skip_upload and args.dataset_name:
             if not setup.upload_to_huggingface(args.dataset_name, args.hf_token):
-                logger.error("YOLOv3 dataset upload failed")
+                logger.error("Dataset upload failed")
                 return
     
-    logger.info("YOLOv3 experiment setup completed successfully!")
+    logger.info("Setup completed successfully!")
     logger.info("Next steps:")
-    logger.info("1. Train YOLOv3: python src/training/yolo/yolov3_trainer.py --data_yaml data/processed/yolov3/data.yaml")
+    logger.info("1. Train model: python src/training/yolo_trainer.py --data_yaml data/processed/data.yaml")
     logger.info("2. Monitor training: wandb login && wandb dashboard")
 
 if __name__ == "__main__":

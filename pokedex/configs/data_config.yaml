@@ -1,4 +1,4 @@
-# Data Configuration for Pokemon Classifier
+# Shared Data Configuration for Pokemon Classifier
 
 # Dataset paths
 data:
@@ -7,21 +7,22 @@ data:
   splits_dir: "data/splits"
   
   # Original datasets
-  kaggle_dataset: "data/raw/kaggle_pokemon"
   gen1_3_dataset: "data/raw/gen1_3_pokemon"  # Your 900MB dataset
   
   # Processed data
   images_dir: "data/processed/images"
   metadata_dir: "data/processed/metadata"
-  augmented_dir: "data/processed/augmented"
+  yolo_dataset: "data/processed/yolo_dataset"
+  clip_dataset: "data/processed/clip_dataset"
+  smolvm_dataset: "data/processed/smolvm_dataset"
 
 # Data processing
 processing:
-  image_size: 416  # YOLO standard size
+  image_size: 416  # Standard size for YOLO, can be resized for other models
   batch_size: 16
   num_workers: 4
   
-  # Augmentation settings
+  # Shared augmentation settings
   augmentation:
     rotation: 15
     brightness: 0.2
@@ -42,5 +43,6 @@ generations:
 
 # Hugging Face settings
 huggingface:
-  dataset_name: "your-username/pokemon-dataset"
-  model_name: "your-username/pokemon-classifier" 
+  yolo_dataset_name: "your-username/pokemon-yolo-gen1-3"
+  clip_dataset_name: "your-username/pokemon-clip-gen1-3"
+  smolvm_dataset_name: "your-username/pokemon-smolvm-gen1-3" 

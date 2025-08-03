@@ -1,0 +1,94 @@
+# Improvement Config - Enhanced YOLOv3 Parameters
+# Goal: Improve upon original blog results
+# Based on: https://www.cnblogs.com/xianmasamasa/p/18995912
+
+# Enhanced model parameters
+model:
+  name: "yolov3"
+  classes: 386  # 1-3 generations
+  img_size: 416
+  pretrained: true
+
+# Improved training parameters
+training:
+  epochs: 150  # More epochs for better convergence
+  batch_size: 16
+  learning_rate: 0.001
+  weight_decay: 0.0005
+  
+  # Enhanced learning rate scheduling
+  scheduler:
+    type: "cosine"  # Better than step decay
+    warmup_epochs: 5  # Gradual warmup
+    lr_schedule: "cosine"
+    
+  # Early stopping to prevent overfitting
+  early_stopping:
+    patience: 15
+    min_delta: 0.001
+
+# Enhanced data settings
+data:
+  train_split: 0.7
+  val_split: 0.15
+  test_split: 0.15
+  
+  # Improved augmentation to address original limitations
+  augmentation:
+    hsv_h: 0.015
+    hsv_s: 0.7
+    hsv_v: 0.4
+    degrees: 10.0  # Rotation to handle orientation
+    translate: 0.1  # Translation for position invariance
+    scale: 0.5
+    shear: 2.0  # Shear for perspective invariance
+    perspective: 0.0
+    flipud: 0.0
+    fliplr: 0.5
+    mosaic: 1.0  # Mosaic for better generalization
+    mixup: 0.1  # Mixup for regularization
+
+# Enhanced hardware optimization
+hardware:
+  device: "auto"
+  memory_limit: "50MB"
+  quantization: "int8"  # Quantization for IoT deployment
+
+# Experiment tracking
+wandb:
+  project: "pokemon-classifier"
+  name: "yolov3-improved"
+  tags: ["yolov3", "improved", "enhanced", "gen1-3"]
+
+# Model saving
+checkpointing:
+  save_freq: 10
+  save_best: true
+  max_checkpoints: 5
+
+# Data quality improvements
+data_quality:
+  quality_threshold: 0.8
+  min_image_size: 100
+  max_image_size: 2000
+  blur_detection: true
+  duplicate_removal: true
+
+# Improvements over original
+improvements:
+  - "Enhanced data augmentation (rotation, shear, mosaic, mixup)"
+  - "Cosine learning rate scheduling with warmup"
+  - "Early stopping to prevent overfitting"
+  - "Better data quality control"
+  - "INT8 quantization for IoT deployment"
+  - "Advanced experiment tracking"
+  - "Improved model checkpointing"
+
+# Expected improvements
+expected_improvements:
+  - "Better performance in low light conditions"
+  - "Reduced sensitivity to object size"
+  - "Improved background handling"
+  - "Higher overall recognition accuracy"
+  - "Better generalization to real-world conditions"
+  - "Optimized for Sipeed Maix Bit deployment" 

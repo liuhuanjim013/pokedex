@@ -1,7 +1,29 @@
 # Data files (too large for GitHub)
-data/
+data/raw/
+data/processed/
+data/splits/
 models/checkpoints/
 models/final/
+models/compressed/
+
+# Dataset files
+*.jpg
+*.png
+*.jpeg
+*.bmp
+*.tiff
+*.webp
+
+# Large files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Processed datasets
+yolo_dataset/
+clip_dataset/
+smolvm_dataset/
 
 # Environment files
 .env

@@ -1,0 +1,119 @@
+# Pokemon Classifier Project Rules
+
+## File Placement Rules
+
+### ALWAYS CHECK ARCHITECTURE.MD FIRST
+Before creating ANY file or directory, you MUST:
+1. Read the ARCHITECTURE.md file to understand the correct structure
+2. Verify the intended location matches the architecture
+3. Check TASKS.md to understand the current task context
+
+### Project Structure (from ARCHITECTURE.md)
+```
+pokedex/
+├── data/                          # Local data storage (gitignored)
+│   ├── raw/                      # Raw downloaded datasets
+│   │   └── all_pokemon/         # All Pokemon data (1025 folders)
+│   ├── processed/                # Shared preprocessed data (gitignored)
+│   └── splits/                  # Train/val/test splits (gitignored)
+├── models/                       # Model storage
+│   ├── checkpoints/             # Training checkpoints (experiment-specific)
+│   ├── final/                   # Final trained models
+│   ├── compressed/              # Optimized for IoT
+│   └── configs/                 # Model configurations
+├── src/                         # Source code
+│   ├── data/                    # Data processing
+│   ├── models/                  # Model implementations
+│   ├── training/                # Training pipelines
+│   ├── evaluation/              # Evaluation code
+│   └── deployment/              # IoT deployment
+├── notebooks/                   # Jupyter notebooks
+├── configs/                     # Configuration files (experiment-specific)
+├── scripts/                     # Utility scripts
+│   ├── yolo/                   # YOLO-specific scripts
+│   ├── vlm/                    # VLM-specific scripts
+│   ├── hybrid/                 # Hybrid-specific scripts
+│   └── common/                 # Common utilities
+├── requirements/                # Dependencies (experiment-specific)
+├── tests/                       # Unit tests
+├── docs/                        # Documentation
+├── .github/                     # GitHub workflows
+├── .gitignore
+├── requirements.txt             # Base requirements
+├── pyproject.toml
+└── README.md
+```
+
+### STRICT RULES
+
+1. **NEVER create files in the parent directory** (same level as ARCHITECTURE.md)
+   - All project files must be inside the `pokedex/` directory
+   - Only ARCHITECTURE.md, TASKS.md, and .git should be at the top level
+
+2. **Scripts placement**:
+   - ALL scripts go in `scripts/` directory
+   - Experiment-specific scripts go in `scripts/yolo/`, `scripts/vlm/`, `scripts/hybrid/`
+   - Common utilities go in `scripts/common/`
+
+3. **Requirements placement**:
+   - Base requirements: `requirements.txt` (in pokedex root)
+   - Experiment-specific: `requirements/yolo_requirements.txt`, etc.
+
+4. **Configs placement**:
+   - ALL configs go in `configs/` directory
+   - Experiment-specific: `configs/yolov3/`, `configs/clip/`, etc.
+
+5. **Source code placement**:
+   - ALL source code goes in `src/` directory
+   - Model-specific code: `src/models/yolo/`, `src/models/vlm/`, etc.
+
+### Before Creating Any File
+
+1. **Check ARCHITECTURE.md**: Verify the intended location
+2. **Check TASKS.md**: Understand the current task context
+3. **Verify path**: Ensure the file goes in the correct subdirectory
+4. **Use absolute paths**: Always reference from the pokedex root
+
+### Environment Setup
+
+- Use conda for environment management
+- Use uv for Python dependency installation
+- Follow the setup script: `scripts/common/setup_environment.py`
+
+### Data Organization
+
+- Raw data: `data/raw/all_pokemon/`
+- Processed data: `data/processed/`
+- Splits: `data/splits/`
+- NEVER commit data to Git (use .gitignore)
+
+### Experiment Organization
+
+- YOLO experiments: `scripts/yolo/`, `configs/yolov3/`, `requirements/yolo_requirements.txt`
+- VLM experiments: `scripts/vlm/`, `configs/clip/`, `requirements/vlm_requirements.txt`
+- Hybrid experiments: `scripts/hybrid/`, `configs/hybrid/`, `requirements/hybrid_requirements.txt`
+
+### Verification Checklist
+
+Before creating any file, ask:
+1. ✅ Does this location match ARCHITECTURE.md?
+2. ✅ Is this the correct subdirectory for the file type?
+3. ✅ Am I inside the pokedex/ directory?
+4. ✅ Does this follow the experiment-specific organization?
+5. ✅ Is this file type allowed in this location?
+
+### Common Mistakes to Avoid
+
+- ❌ Creating files in parent directory
+- ❌ Mixing experiment-specific files in wrong directories
+- ❌ Creating scripts outside of scripts/ directory
+- ❌ Creating configs outside of configs/ directory
+- ❌ Creating source code outside of src/ directory
+- ❌ Creating requirements outside of requirements/ directory
+
+### When in Doubt
+
+1. Read ARCHITECTURE.md again
+2. Check TASKS.md for context
+3. Ask for clarification before proceeding
+4. Verify the intended location matches the architecture 
