@@ -198,7 +198,7 @@ class PokemonDataPreprocessor:
     
     def create_yolo_dataset(self, output_dir: str = "data/processed/yolo_dataset"):
         """
-        Create YOLO-compatible dataset structure.
+        Create YOLO-compatible dataset structure with detection format.
         
         Args:
             output_dir: Output directory for YOLO dataset
@@ -219,7 +219,7 @@ class PokemonDataPreprocessor:
         with open(metadata_path, 'r') as f:
             metadata = json.load(f)
         
-        # Create Pokemon name to class ID mapping
+        # Create Pokemon name to class ID mapping (0-based indexing)
         unique_pokemon = list(set(metadata['pokemon_names']))
         unique_pokemon.sort()  # Sort for consistent ordering
         pokemon_to_id = {name: idx for idx, name in enumerate(unique_pokemon)}
@@ -259,9 +259,11 @@ class PokemonDataPreprocessor:
         
         logger.info(f"Created YOLO dataset at {output_dir}")
         logger.info(f"Classes: {len(class_mapping)}")
+        logger.info(f"Using 0-based class indexing")
+        logger.info(f"Using YOLO detection format with full-image bounding boxes")
     
     def _process_split(self, split_data, output_dir, split_name, pokemon_to_id):
-        """Process a single data split."""
+        """Process a single data split with YOLO detection format."""
         for pokemon_name, image_paths in split_data:
             class_id = pokemon_to_id[pokemon_name]
             
@@ -273,10 +275,12 @@ class PokemonDataPreprocessor:
                 import shutil
                 shutil.copy2(src_path, dst_path)
                 
-                # Create YOLO label file (classification format)
+                # Create YOLO detection label file with full-image bounding box
+                # Format: <class_id> <x_center> <y_center> <width> <height>
+                # Full image: center at (0.5, 0.5), size (1.0, 1.0)
                 label_path = output_dir / "labels" / split_name / f"{src_path.stem}.txt"
                 with open(label_path, 'w') as f:
-                    f.write(f"{class_id}\n")
+                    f.write(f"{class_id} 0.5 0.5 1.0 1.0\n")
 
 def main():
     parser = argparse.ArgumentParser(description="Preprocess Pokemon dataset with multiprocessing")

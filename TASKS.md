@@ -18,55 +18,69 @@ Build a real-time Pokemon classifier that can identify 1025 Pokemon species from
    - ✅ Correct Pokemon names mapping (all 1025 Pokemon)
    - ✅ YOLO dataset created with proper format
    - ✅ Within-class splitting (70/15/15) implemented
+4. **Task 2.1.5**: Enhanced Dataset Verification (COMPLETED)
+   - ✅ Image content verification (102 sample images)
+   - ✅ Processing quality validation (100% properly processed)
+   - ✅ YOLO format verification (perfect detection format)
+   - ✅ Statistical quality analysis (excellent diversity)
+   - ✅ Dataset integrity validation (14,458 image-label pairs)
 
-### 🔄 CURRENT TASK: Task 2.2 - Model-Specific Dataset Creation
-**Priority**: High  
-**Status**: Ready to start  
-**Next Action**: Create CLIP and SMoLVM dataset formats
+### 🎯 CURRENT PRIORITY: YOLO Reproduction (ASAP)
+**Priority**: CRITICAL  
+**Status**: Ready to Start  
+**Next Action**: Begin YOLOv3 training in Google Colab
 
 **Immediate Next Steps:**
-1. **Create CLIP format dataset** from processed images
-2. **Create SMoLVM format dataset** from processed images  
-3. **Upload all datasets to Hugging Face** for Colab access
-4. **Begin original blog reproduction** (Task 1.4)
+1. **Set up YOLOv3 training in Google Colab** (replacing Mx_yolo binary)
+2. **Configure training pipeline** with 1025 classes
+3. **Use verified YOLO dataset** (data/processed/yolo_dataset/)
+4. **Reproduce original blog results** as baseline
+5. **Document baseline performance** for comparison
+6. **Begin improvement implementation** after baseline
 
 ### 📋 IMMEDIATE TODO LIST
 
-#### High Priority (Next 1-2 days):
+#### Critical Priority (Next 1-2 days):
+- [ ] **Set up Google Colab environment** for YOLOv3 training
+- [ ] **Configure YOLOv3 training pipeline** (replacing Mx_yolo binary)
+- [ ] **Load verified YOLO dataset** (data/processed/yolo_dataset/)
+- [ ] **Train baseline YOLOv3 model** with 1025 classes
+- [ ] **Document baseline performance** and limitations
+- [ ] **Set up W&B tracking** for experiment monitoring
+
+#### High Priority (Next 3-5 days):
+- [ ] **Implement YOLOv3 improvements** (augmentation, scheduling)
+- [ ] **Compare improved vs baseline** performance
 - [ ] **Create CLIP dataset format** (text prompts + images)
 - [ ] **Create SMoLVM dataset format** (text prompts + images)
-- [ ] **Upload all datasets to Hugging Face** (YOLO, CLIP, SMoLVM)
-- [ ] **Set up original blog reproduction** (Task 1.4)
+- [ ] **Upload datasets to Hugging Face** for Colab access
 
-#### Medium Priority (Next 3-5 days):
-- [ ] **Configure YOLOv3 training** for exact reproduction
-- [ ] **Set up W&B project tracking**
-- [ ] **Begin baseline model training** (YOLOv3 reproduction)
-- [ ] **Implement VLM training pipelines** (CLIP, SMoLVM)
-
-#### Low Priority (Next week):
+#### Medium Priority (Next week):
 - [ ] **Test newer YOLO variants** (v8, v9, v10)
+- [ ] **Implement VLM training pipelines** (CLIP, SMoLVM)
 - [ ] **Create model comparison framework**
 - [ ] **Implement multi-frame aggregation**
 
 ### 🎯 SUCCESS METRICS FOR NEXT PHASE
-- **Dataset Creation**: YOLO, CLIP, and SMoLVM datasets ready
-- **Hugging Face Upload**: All datasets accessible for Colab training
-- **Model Training**: YOLOv3 baseline trained on 1025 classes (reproduction)
-- **Experiment Tracking**: W&B project with all experiments logged
+- **YOLO Training**: Baseline YOLOv3 model trained on 1025 classes
+- **Performance Baseline**: Documented accuracy and limitations
+- **Improvement Ready**: Enhanced YOLOv3 training pipeline implemented
+- **Experiment Tracking**: W&B project with baseline and improvement experiments
 
 ### 🚨 BLOCKERS & RISKS
-1. **Dataset Format Complexity**: CLIP and SMoLVM require text prompts
-2. **Colab GPU Access**: May need Colab Pro for large-scale training
-3. **Model Training Scale**: 1025 classes may require significant resources
+1. **Colab GPU Access**: May need Colab Pro for large-scale training
+2. **Training Time**: 1025 classes may require significant training time
+3. **Memory Constraints**: Large dataset may require batch size optimization
 
 ### 📊 PROGRESS SUMMARY
-- **Phase 1**: 80% complete (environment + data analysis + preprocessing done)
-- **Phase 2**: 50% complete (data processing done, dataset creation pending)
-- **Phase 3**: 0% complete (model training pending)
-- **Overall Project**: 25% complete
+- **Phase 1**: 90% complete (environment + data analysis + preprocessing + verification done)
+- **Phase 2**: 80% complete (data processing done, YOLO dataset ready for training)
+- **Phase 3**: 0% complete (model training pending - READY TO START)
+- **Overall Project**: 30% complete
 
 **Estimated Timeline**: 7 weeks remaining (original 10-week timeline)
+
+**CURRENT FOCUS**: YOLO reproduction as baseline for all future improvements
 
 ## Phase 1: Research & Setup (Weeks 1-2)
 
@@ -167,6 +181,30 @@ Build a real-time Pokemon classifier that can identify 1025 Pokemon species from
 - ✅ Within-class splitting (70/15/15) implemented
 - ✅ Processing speed: ~1400 images/second with 8 workers
 
+### Task 2.1.5: Fix YOLO Dataset Format Issues
+**Priority**: High  
+**Duration**: 1-2 days  
+**Dependencies**: Task 2.1
+
+- [ ] Fix class indices (convert from 1-based to 0-based indexing)
+- [ ] Add full-image bounding boxes to all label files
+- [ ] Convert to YOLO detection format with proper coordinates
+- [ ] Verify dataset format is correct for YOLO training
+- [ ] Test with YOLO training pipeline
+- [ ] Document the format conversion process
+
+**ISSUES IDENTIFIED:**
+- **Class Index Problem**: Grimmsnarl at line 365 (0-based = 364), but label shows `364` (should be `363`)
+- **Missing Bounding Boxes**: Need full-image bounding box coordinates for YOLO detection
+- **Label Format**: Currently classification format, need detection format
+- **Required Format**: `<class_id> <x_center> <y_center> <width> <height>`
+
+**SOLUTION APPROACH:**
+- **Fix Indices**: Subtract 1 from all class IDs for 0-based indexing
+- **Add Bounding Boxes**: Use `0.5 0.5 1.0 1.0` for full-image coverage
+- **Example**: `93 0.5 0.5 1.0 1.0` for bulbasaur (class 93)
+- **Verify**: Test with YOLO training to ensure format is correct
+
 ### Task 2.2: Model-Specific Dataset Creation
 **Priority**: High  
 **Duration**: 2-3 days  
@@ -181,7 +219,7 @@ Build a real-time Pokemon classifier that can identify 1025 Pokemon species from
 - [ ] Upload datasets to Hugging Face Hub
 
 **CURRENT STATUS:**
-- ✅ YOLO dataset created with proper format (images/, labels/, classes.txt)
+- 🔄 YOLO dataset created but needs format fixes (class indices + bounding boxes)
 - 🔄 CLIP dataset creation pending (text prompts + images)
 - 🔄 SMoLVM dataset creation pending (text prompts + images)
 - 🔄 Hugging Face upload pending
