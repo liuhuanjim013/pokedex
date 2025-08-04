@@ -90,7 +90,8 @@ def verify_installation(env_name="pokemon-classifier"):
     
     required_packages = [
         "numpy", "pandas", "matplotlib", "seaborn", 
-        "PIL", "cv2", "torch", "transformers"
+        "PIL", "cv2", "torch", "transformers",
+        "datasets", "huggingface_hub", "ultralytics"
     ]
     
     missing_packages = []
@@ -118,6 +119,36 @@ def verify_installation(env_name="pokemon-classifier"):
     else:
         print("\n✅ All required packages are installed!")
         return True
+
+def install_huggingface_dependencies(env_name="pokemon-classifier"):
+    """Install Hugging Face dependencies for dataset upload"""
+    print("📦 Installing Hugging Face dependencies...")
+    try:
+        # Install datasets and huggingface_hub
+        subprocess.check_call([
+            "conda", "run", "-n", env_name, "uv", "pip", "install", 
+            "datasets", "huggingface_hub"
+        ])
+        print("✅ Hugging Face dependencies installed successfully!")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Failed to install Hugging Face dependencies: {e}")
+        return False
+
+def install_yolo_dependencies(env_name="pokemon-classifier"):
+    """Install YOLO training dependencies"""
+    print("📦 Installing YOLO training dependencies...")
+    try:
+        # Install ultralytics for YOLO training
+        subprocess.check_call([
+            "conda", "run", "-n", env_name, "uv", "pip", "install", 
+            "ultralytics", "wandb"
+        ])
+        print("✅ YOLO training dependencies installed successfully!")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Failed to install YOLO dependencies: {e}")
+        return False
 
 def main():
     """Main setup function"""
@@ -186,6 +217,17 @@ def main():
         if not install_dependencies_with_uv(str(exp_requirements), args.env_name):
             return
     
+    # Install additional dependencies based on experiment type
+    if args.experiment == "yolo":
+        print("\n📦 Installing YOLO training dependencies...")
+        if not install_yolo_dependencies(args.env_name):
+            return
+    
+    # Install Hugging Face dependencies for dataset upload
+    print("\n📦 Installing Hugging Face dependencies...")
+    if not install_huggingface_dependencies(args.env_name):
+        return
+    
     # Verify installation
     if args.verify or args.experiment:
         verify_installation(args.env_name)
@@ -194,12 +236,14 @@ def main():
     print(f"\n📋 Next steps:")
     print(f"  1. Activate environment: conda activate {args.env_name}")
     print(f"  2. Run dataset analysis: python scripts/common/dataset_analysis.py")
-    print(f"  3. Set up experiment: python scripts/common/experiment_manager.py")
-    print(f"  4. Start training: python scripts/yolo/setup_yolov3_experiment.py")
+    print(f"  3. Upload dataset to Hugging Face: python scripts/common/upload_yolo_dataset.py")
+    print(f"  4. Set up experiment: python scripts/common/experiment_manager.py")
+    print(f"  5. Start training: python scripts/yolo/setup_yolov3_experiment.py")
     
     print(f"\n💡 For Google Colab:")
     print(f"  • Use the --colab flag for automatic conda/uv setup")
     print(f"  • Environment will be ready for immediate use")
+    print(f"  • Dataset upload script ready for Hugging Face integration")
 
 if __name__ == "__main__":
     main() 
