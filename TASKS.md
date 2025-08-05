@@ -42,19 +42,53 @@ Build a real-time Pokemon classifier that can identify 1025 Pokemon species from
 1. **Set up Google Colab environment** for YOLOv3 training
 2. **Load dataset from Hugging Face** (liuhuanjim013/pokemon-yolo-1025)
 3. **Configure YOLOv3 training pipeline** with 1025 classes
-4. **Reproduce original blog results** as baseline
+4. **Reproduce original blog results** as baseline (1025 classes)
 5. **Document baseline performance** and limitations
 6. **Begin improvement implementation** after baseline
 
 ### 📋 IMMEDIATE TODO LIST
 
+#### Authentication & Environment (COMPLETED):
+- [x] **Hugging Face Authentication**:
+  - [x] Test different auth methods (env var, token file, login)
+  - [x] Verify dataset access works (21,689 training examples)
+  - [x] Document token priority and storage
+  - [x] Create test script for auth verification
+  - [x] Set up git credential helper (store)
+  - [x] Test push access to Hugging Face
+  - [x] Document git credential setup
+- [x] **W&B Authentication**:
+  - [x] Set up W&B project and API key
+  - [x] Test experiment tracking (run-20250806_094807-wqakzrbo)
+  - [x] Configure project structure
+  - [x] Set up run resumption
+- [x] **Dataset Access**:
+  - [x] Verify dataset loading works
+  - [x] List dataset files successfully
+  - [x] Confirm training examples count
+  - [x] Document dataset structure
+
 #### Critical Priority (Next 1-2 days):
+- [ ] **Update existing configs** to match new architecture
+  - [ ] Merge `configs/yolov3/original_blog_config.yaml` into `configs/yolov3/baseline_config.yaml`
+  - [ ] Update `configs/yolov3/reproduction_config.yaml` with exact blog parameters (1025 classes)
+  - [ ] Create `configs/yolov3/improved_config.yaml` for enhanced training
+- [ ] **Update existing scripts** to match new architecture
+  - [ ] Merge `scripts/yolo/reproduce_original_blog.py` into `scripts/yolo/train_yolov3_baseline.py`
+  - [ ] Update `scripts/yolo/setup_yolov3_experiment.py` to `scripts/yolo/setup_colab_training.py`
+  - [ ] Create `scripts/yolo/train_yolov3_improved.py` for enhanced training
+  - [ ] Create `scripts/yolo/resume_training.py` for checkpoint resume
+- [ ] **Create missing source code modules**
+  - [ ] Create `src/training/yolo/trainer.py` (core training class)
+  - [ ] Create `src/training/yolo/checkpoint_manager.py` (checkpoint utilities)
+  - [ ] Create `src/training/yolo/wandb_integration.py` (W&B utilities)
 - [ ] **Set up Google Colab environment** for YOLOv3 training
 - [ ] **Load dataset from Hugging Face** (liuhuanjim013/pokemon-yolo-1025)
-- [ ] **Configure YOLOv3 training pipeline** (replacing Mx_yolo binary)
-- [ ] **Train baseline YOLOv3 model** with 1025 classes
+- [ ] **Train baseline YOLOv3 model** with 1025 classes (original blog reproduction)
 - [ ] **Document baseline performance** and limitations
 - [ ] **Set up W&B tracking** for experiment monitoring
+- [ ] **Implement checkpoint saving/resume** functionality
+- [ ] **Configure Google Drive integration** for persistent storage
 
 #### High Priority (Next 3-5 days):
 - [ ] **Implement YOLOv3 improvements** (augmentation, scheduling)
@@ -62,26 +96,35 @@ Build a real-time Pokemon classifier that can identify 1025 Pokemon species from
 - [ ] **Create CLIP dataset format** (text prompts + images)
 - [ ] **Create SMoLVM dataset format** (text prompts + images)
 - [ ] **Upload additional datasets to Hugging Face** for Colab access
+- [ ] **Set up W&B sweeps** for hyperparameter optimization
+- [ ] **Implement automatic checkpoint cleanup** and backup
 
 #### Medium Priority (Next week):
 - [ ] **Test newer YOLO variants** (v8, v9, v10)
 - [ ] **Implement VLM training pipelines** (CLIP, SMoLVM)
 - [ ] **Create model comparison framework**
 - [ ] **Implement multi-frame aggregation**
+- [ ] **Create comprehensive W&B dashboard** for experiment comparison
+- [ ] **Upload final models to Hugging Face** for sharing
 
 ### 🎯 SUCCESS METRICS FOR NEXT PHASE
 - **Colab Setup**: YOLOv3 training environment ready in Google Colab
 - **Dataset Loading**: Successfully load from Hugging Face Hub
-- **Baseline Training**: YOLOv3 model trained on 1025 classes
+- **Baseline Training**: YOLOv3 model trained on 1025 classes (original blog reproduction)
 - **Performance Baseline**: Documented accuracy and limitations
 - **Improvement Ready**: Enhanced YOLOv3 training pipeline implemented
 - **Experiment Tracking**: W&B project with baseline and improvement experiments
+- **Checkpoint Management**: Automatic save/resume functionality working
+- **W&B Integration**: Real-time monitoring and visualization active
 
 ### 🚨 BLOCKERS & RISKS
 1. **Colab GPU Access**: May need Colab Pro for large-scale training
 2. **Training Time**: 1025 classes may require significant training time
 3. **Memory Constraints**: Large dataset may require batch size optimization
 4. **Hugging Face Access**: Ensure dataset is publicly accessible
+5. **W&B API Limits**: Monitor API usage for experiment tracking
+6. **Google Drive Storage**: Ensure sufficient space for checkpoints
+7. **Existing File Conflicts**: Need to merge/update existing configs and scripts
 
 ### 📊 PROGRESS SUMMARY
 - **Phase 1**: 95% complete (environment + data analysis + preprocessing + verification + upload done)
@@ -92,6 +135,148 @@ Build a real-time Pokemon classifier that can identify 1025 Pokemon species from
 **Estimated Timeline**: 7 weeks remaining (original 10-week timeline)
 
 **CURRENT FOCUS**: YOLO training in Google Colab using Hugging Face dataset
+
+### 🎯 File Organization & Cleanup Tasks
+
+#### Existing Files to Update/Merge:
+- [ ] **Configs**: 
+  - [ ] Merge `configs/yolov3/original_blog_config.yaml` → `configs/yolov3/baseline_config.yaml`
+  - [ ] Update `configs/yolov3/reproduction_config.yaml` with exact blog parameters
+  - [ ] Create `configs/yolov3/improved_config.yaml` for enhanced training
+- [ ] **Scripts**:
+  - [ ] Merge `scripts/yolo/reproduce_original_blog.py` → `scripts/yolo/train_yolov3_baseline.py`
+  - [ ] Update `scripts/yolo/setup_yolov3_experiment.py` → `scripts/yolo/setup_colab_training.py`
+  - [ ] Create `scripts/yolo/train_yolov3_improved.py` for enhanced training
+  - [ ] Create `scripts/yolo/resume_training.py` for checkpoint resume
+- [ ] **Source Code**:
+  - [ ] Update `src/training/yolo_trainer.py` → `src/training/yolo/trainer.py`
+  - [ ] Update `src/training/yolo/yolov3_trainer.py` → merge into `src/training/yolo/trainer.py`
+  - [ ] Create `src/training/yolo/checkpoint_manager.py`
+  - [ ] Create `src/training/yolo/wandb_integration.py`
+
+#### Files to Remove (Wrong Design):
+- [ ] Remove any files that don't follow the new architecture
+- [ ] Clean up redundant configs and scripts
+- [ ] Ensure all files are in correct locations according to `.cursorrules`
+
+#### Files to Create (Missing):
+- [ ] **Evaluation**: `src/evaluation/yolo/evaluator.py`
+- [ ] **Evaluation**: `src/evaluation/yolo/metrics.py`
+- [ ] **Notebooks**: `notebooks/yolo_experiments/baseline_training.ipynb`
+- [ ] **Notebooks**: `notebooks/yolo_experiments/improved_training.ipynb`
+- [ ] **Requirements**: `requirements/yolo_requirements.txt`
+
+### 🎯 W&B Integration & Checkpoint Management
+
+#### W&B Setup Strategy
+**Project Configuration:**
+- **Project Name**: "pokemon-classifier"
+- **Experiment Names**: 
+  - "yolov3-baseline-reproduction" (original blog parameters)
+  - "yolov3-improved-training" (enhanced parameters)
+  - "yolov3-hyperparameter-sweep" (optimization runs)
+- **Metrics Tracking**: Loss curves, accuracy, mAP, learning rate, validation metrics
+- **Artifacts**: Model checkpoints, training logs, evaluation results
+- **Dashboard**: Real-time training progress and experiment comparison
+
+**W&B Integration Features:**
+- **Real-time Monitoring**: Live loss curves and accuracy plots
+- **Hyperparameter Logging**: Track all training parameters and configurations
+- **Model Comparison**: Side-by-side comparison of baseline vs improved models
+- **Artifact Management**: Automatic upload of checkpoints and logs
+- **Sweep Configuration**: Automated hyperparameter optimization
+- **Alert System**: Notifications for training completion or issues
+
+#### Checkpoint Management Strategy
+**Save Strategy:**
+- **Frequency**: Every 10 epochs (configurable)
+- **Storage Location**: Google Drive for persistence across Colab sessions
+- **Metadata**: Training configuration, epoch number, performance metrics
+- **Version Control**: Checkpoint naming with timestamp and epoch
+
+**Resume Strategy:**
+- **Auto-detection**: Automatically find latest checkpoint on startup
+- **Validation**: Verify checkpoint integrity before loading
+- **Configuration**: Resume with same training parameters
+- **Progress Tracking**: Continue from exact epoch and step
+
+**Storage Management:**
+- **Google Drive Integration**: Mount drive for persistent storage
+- **Cleanup Policy**: Keep last 5 checkpoints, delete older ones
+- **Backup Strategy**: Critical checkpoints uploaded to Hugging Face Hub
+- **Space Optimization**: Compress old checkpoints to save space
+
+#### Training Pipeline with W&B & Checkpoints
+```python
+# W&B Integration
+import wandb
+wandb.init(
+    project="pokemon-classifier",
+    name="yolov3-baseline-reproduction",
+    config={
+        "model": "yolov3",
+        "dataset": "liuhuanjim013/pokemon-yolo-1025",
+        "classes": 1025,
+        "epochs": 100,
+        "batch_size": 16,
+        "learning_rate": 0.001,
+        "original_blog": "https://www.cnblogs.com/xianmasamasa/p/18995912"
+    }
+)
+
+# Checkpoint Management
+def save_checkpoint(model, optimizer, epoch, metrics):
+    checkpoint = {
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'metrics': metrics,
+        'config': wandb.config
+    }
+    torch.save(checkpoint, f'/content/drive/checkpoints/yolov3_epoch_{epoch}.pt')
+    wandb.save(f'/content/drive/checkpoints/yolov3_epoch_{epoch}.pt')
+
+def load_latest_checkpoint(model, optimizer):
+    # Find latest checkpoint
+    checkpoint_files = glob.glob('/content/drive/checkpoints/yolov3_epoch_*.pt')
+    if checkpoint_files:
+        latest_checkpoint = max(checkpoint_files, key=os.path.getctime)
+        checkpoint = torch.load(latest_checkpoint)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        return checkpoint['epoch'], checkpoint['metrics']
+    return 0, {}
+
+# Training Loop with W&B Logging
+for epoch in range(start_epoch, total_epochs):
+    # Training
+    train_loss = train_epoch(model, train_loader, optimizer)
+    
+    # Validation
+    val_metrics = validate_epoch(model, val_loader)
+    
+    # Log to W&B
+    wandb.log({
+        'epoch': epoch,
+        'train_loss': train_loss,
+        'val_loss': val_metrics['loss'],
+        'val_accuracy': val_metrics['accuracy'],
+        'val_map': val_metrics['mAP'],
+        'learning_rate': optimizer.param_groups[0]['lr']
+    })
+    
+    # Save checkpoint every 10 epochs
+    if epoch % 10 == 0:
+        save_checkpoint(model, optimizer, epoch, val_metrics)
+```
+
+#### Success Metrics for W&B & Checkpoints
+- **W&B Integration**: Real-time monitoring dashboard active
+- **Checkpoint Saving**: Automatic save every 10 epochs working
+- **Resume Functionality**: Training can resume from any checkpoint
+- **Storage Management**: Google Drive integration working
+- **Performance Tracking**: All metrics logged and visualized
+- **Experiment Comparison**: Baseline vs improved models comparable
 
 ## Phase 1: Research & Setup (Weeks 1-2)
 

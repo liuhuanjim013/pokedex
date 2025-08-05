@@ -74,11 +74,63 @@ pokedex/
 3. **Verify path**: Ensure the file goes in the correct subdirectory
 4. **Use absolute paths**: Always reference from the pokedex root
 
-### Environment Setup
+### Environment & Authentication Setup
 
+#### Environment Management
 - Use conda for environment management
 - Use uv for Python dependency installation
 - Follow the setup script: `scripts/common/setup_environment.py`
+
+#### Authentication Rules
+1. **Hugging Face Authentication**:
+   - **Token Storage**:
+     - Use `HUGGINGFACE_TOKEN` environment variable
+     - Verify token format starts with `hf_`
+     - NEVER hardcode tokens in source code
+     - NEVER commit tokens to git
+   - **Git Credentials**:
+     - ALWAYS set up git credential helper first
+     - Use `git config --global credential.helper store`
+     - Add token to git with `--add-to-git-credential`
+     - Verify git credentials before pushing
+   - **Token Validation**:
+     - Check format with `validate_hf_token()`
+     - Verify login with `api.whoami()`
+     - Test dataset access with `load_dataset()`
+     - Document token permissions and scope
+
+2. **W&B Authentication**:
+   - **API Key**:
+     - Store in `WANDB_API_KEY` environment variable
+     - NEVER hardcode keys in source code
+     - NEVER commit keys to git
+   - **Project Setup**:
+     - Project name: "pokemon-classifier"
+     - Entity: Your W&B username
+     - Run names: Experiment-specific (e.g., "yolov3-baseline")
+     - Tags: ["baseline", "improved", "experiment"]
+   - **Run Management**:
+     - Enable resumption with `resume=True`
+     - Save checkpoints every 10 epochs
+     - Log metrics in real-time
+     - Clean up resources on completion
+
+3. **Token Security**:
+   - **Environment Variables**:
+     - Set in Colab secrets for persistence
+     - Use local `.env` for development
+     - Validate all tokens before use
+     - Clear tokens after use
+   - **File Storage**:
+     - Keep tokens out of notebooks
+     - Use proper token storage locations
+     - Clean up token files after use
+     - Follow security best practices
+   - **Access Control**:
+     - Use read-only tokens when possible
+     - Scope tokens to specific repos
+     - Rotate tokens regularly
+     - Monitor token usage
 
 ### Data Organization
 

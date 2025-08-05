@@ -62,24 +62,71 @@ def install_dependencies_with_uv(requirements_file, env_name="pokemon-classifier
         print(f"❌ Failed to install dependencies: {e}")
         return False
 
+def accept_conda_tos():
+    """Accept conda Terms of Service for required channels."""
+    print("📜 Accepting conda Terms of Service...")
+    channels = [
+        "https://repo.anaconda.com/pkgs/main",
+        "https://repo.anaconda.com/pkgs/r",
+        "conda-forge"  # Also accept for conda-forge which we'll use
+    ]
+    
+    for channel in channels:
+        try:
+            subprocess.check_call(["conda", "tos", "accept", "--override-channels", "--channel", channel])
+            print(f"✅ Accepted ToS for {channel}")
+        except subprocess.CalledProcessError as e:
+            if "Unknown command" in str(e):
+                # Older conda versions don't have tos command, try to proceed
+                print("ℹ️ Older conda version detected, attempting to proceed without ToS acceptance")
+                return True
+            print(f"⚠️ Failed to accept ToS for {channel}: {e}")
+            return False
+    return True
+
 def setup_colab_environment():
     """Set up environment for Google Colab"""
     print("☁️  Setting up Google Colab environment...")
     
-    # Install conda if not available
+    # Check if conda is already available
     try:
         subprocess.check_call(["conda", "--version"])
-        print("✅ Conda is available")
+        print("✅ Conda is already available")
+        return
     except (subprocess.CalledProcessError, FileNotFoundError):
-        print("📦 Installing conda...")
+        print("🔍 Conda not found, will install...")
+    
+    # Check if installer is already downloaded
+    installer = "Miniconda3-latest-Linux-x86_64.sh"
+    if not os.path.exists(installer):
+        print("📥 Downloading Miniconda installer...")
         subprocess.check_call([
-            "wget", "https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh"
+            "wget", f"https://repo.anaconda.com/miniconda/{installer}"
         ])
-        subprocess.check_call([
-            "bash", "Miniconda3-latest-Linux-x86_64.sh", "-b", "-p", "/usr/local"
-        ])
-        # Add conda to PATH
-        os.environ["PATH"] = "/usr/local/bin:" + os.environ.get("PATH", "")
+    else:
+        print("✅ Miniconda installer already downloaded")
+    
+    # Install Miniconda
+    print("📦 Installing conda...")
+    conda_install_path = "/content/miniconda3"
+    subprocess.check_call([
+        "bash", installer, "-b", "-p", conda_install_path
+    ])
+    
+    # Add conda to PATH
+    os.environ["PATH"] = f"{conda_install_path}/bin:" + os.environ.get("PATH", "")
+    
+    # Initialize conda for shell
+    subprocess.check_call([f"{conda_install_path}/bin/conda", "init"])
+    
+    # Clean up installer
+    os.remove(installer)
+    
+    print("✅ Conda installed successfully")
+    
+    # Accept Terms of Service
+    if not accept_conda_tos():
+        raise RuntimeError("Failed to accept conda Terms of Service")
     
     # Install uv
     install_uv()

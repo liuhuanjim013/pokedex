@@ -110,33 +110,53 @@ pokedex/
 │   ├── final/                   # Final trained models
 │   ├── compressed/              # Optimized for IoT
 │   └── configs/                 # Model configurations
-├── src/                         # Source code
-│   ├── data/                    # Data processing
-│   │   ├── preprocessing.py
-│   │   ├── augmentation.py
-│   │   └── dataset.py
+├── src/                         # Source code (reusable modules)
+│   ├── data/                    # Data processing modules
+│   │   ├── preprocessing.py     # Data preprocessing class
+│   │   ├── augmentation.py      # Data augmentation utilities
+│   │   └── dataset.py          # Dataset loading classes
 │   ├── models/                  # Model implementations
-│   │   ├── yolo/               # YOLO variants
-│   │   │   ├── yolov3_trainer.py
-│   │   │   ├── yolov8_trainer.py
-│   │   │   └── yolo_nas_trainer.py
-│   │   ├── vlm/                # VLM models
-│   │   │   ├── clip_trainer.py
-│   │   │   ├── smolvm_trainer.py
-│   │   │   └── mobilevlm_trainer.py
-│   │   └── hybrid/             # Hybrid approaches
-│   ├── training/                # Training pipelines
-│   │   ├── yolo/               # YOLO training
-│   │   ├── vlm/                # VLM training
-│   │   └── hybrid/             # Hybrid training
-│   ├── evaluation/              # Evaluation code
-│   │   ├── yolo/               # YOLO evaluation
-│   │   ├── vlm/                # VLM evaluation
-│   │   └── hybrid/             # Hybrid evaluation
-│   └── deployment/              # IoT deployment
-│       ├── yolo/               # YOLO deployment
-│       ├── vlm/                # VLM deployment
-│       └── hybrid/             # Hybrid deployment
+│   │   ├── yolo/               # YOLO model classes
+│   │   │   ├── trainer.py      # YOLO training class
+│   │   │   ├── checkpoint_manager.py # Checkpoint utilities
+│   │   │   └── wandb_integration.py # W&B integration class
+│   │   ├── vlm/                # VLM model classes
+│   │   │   ├── clip_trainer.py # CLIP training class
+│   │   │   └── smolvm_trainer.py # SMoLVM training class
+│   │   └── hybrid/             # Hybrid model classes
+│   ├── training/                # Training pipeline modules
+│   │   ├── yolo/               # YOLO training utilities
+│   │   │   ├── trainer.py      # Core training class
+│   │   │   ├── checkpoint_manager.py # Checkpoint management
+│   │   │   └── wandb_integration.py # W&B utilities
+│   │   ├── vlm/                # VLM training utilities
+│   │   └── hybrid/             # Hybrid training utilities
+│   ├── evaluation/              # Evaluation modules
+│   │   ├── yolo/               # YOLO evaluation classes
+│   │   │   ├── evaluator.py    # Model evaluation class
+│   │   │   └── metrics.py      # Performance metrics
+│   │   ├── vlm/                # VLM evaluation classes
+│   │   └── hybrid/             # Hybrid evaluation classes
+│   └── deployment/              # IoT deployment modules
+│       ├── yolo/               # YOLO deployment utilities
+│       ├── vlm/                # VLM deployment utilities
+│       └── hybrid/             # Hybrid deployment utilities
+├── scripts/                     # Utility scripts (executable)
+│   ├── yolo/                   # YOLO-specific scripts
+│   │   ├── setup_colab_training.py # Colab environment setup
+│   │   ├── train_yolov3_baseline.py # Baseline training script
+│   │   ├── train_yolov3_improved.py # Improved training script
+│   │   └── resume_training.py  # Resume from checkpoint script
+│   ├── vlm/                    # VLM-specific scripts
+│   │   ├── setup_clip_experiment.py # CLIP experiment setup
+│   │   └── setup_smolvm_experiment.py # SMoLVM experiment setup
+│   ├── hybrid/                 # Hybrid-specific scripts
+│   └── common/                 # Common utility scripts
+│       ├── setup_environment.py # Environment setup
+│       ├── dataset_analysis.py # Dataset analysis script
+│       ├── upload_dataset.py   # Dataset upload script
+│       ├── experiment_manager.py # Experiment management
+│       └── data_processor.py   # Data processing script
 ├── notebooks/                   # Jupyter notebooks
 │   ├── yolo_experiments/       # YOLO experiments
 │   ├── vlm_experiments/        # VLM experiments
@@ -152,25 +172,6 @@ pokedex/
 │   ├── clip/                   # CLIP configurations
 │   ├── smolvm/                 # SMoLVM configurations
 │   └── hybrid/                 # Hybrid configurations
-├── scripts/                     # Utility scripts
-│   ├── yolo/                   # YOLO-specific scripts
-│   │   ├── setup_yolov3_experiment.py
-│   │   └── setup_yolov8_experiment.py
-│   ├── vlm/                    # VLM-specific scripts
-│   │   ├── setup_clip_experiment.py
-│   │   └── setup_smolvm_experiment.py
-│   ├── hybrid/                 # Hybrid-specific scripts
-│   └── common/                 # Common utilities
-│       ├── setup_environment.py
-│       ├── dataset_analysis.py
-│       ├── organize_raw_data.py
-│       ├── data_processor.py
-│       ├── experiment_manager.py
-│       └── upload_dataset.py
-├── requirements/                # Dependencies (experiment-specific)
-│   ├── yolo_requirements.txt
-│   ├── vlm_requirements.txt
-│   └── hybrid_requirements.txt
 ├── tests/                       # Unit tests
 ├── docs/                        # Documentation
 ├── .github/                     # GitHub workflows
@@ -180,6 +181,51 @@ pokedex/
 ├── pyproject.toml
 └── README.md
 ```
+
+#### **Key Distinction: Scripts vs Source Code**
+
+**📁 `scripts/` Folder - Executable Utility Scripts**
+- **Purpose**: Standalone executable scripts for specific tasks
+- **Nature**: Command-line tools, setup scripts, one-off utilities
+- **Usage**: Run directly from command line (`python scripts/yolo/train_yolov3_baseline.py`)
+- **Examples**: 
+  - `setup_environment.py` - Environment setup and dependency installation (used by notebooks and local dev)
+  - `upload_dataset.py` - Dataset upload to Hugging Face Hub
+  - `dataset_analysis.py` - Data analysis and visualization
+  - `train_yolov3_baseline.py` - Training execution script
+  - `resume_training.py` - Resume training from checkpoint
+
+**📁 `src/` Folder - Reusable Source Code Modules**
+- **Purpose**: Importable modules and classes for reuse across scripts
+- **Nature**: Libraries, frameworks, reusable components
+- **Usage**: Imported by scripts and notebooks (`from src.training.yolo.trainer import YOLOTrainer`)
+- **Examples**:
+  - `src/training/yolo/trainer.py` - Training class (imported by scripts)
+  - `src/evaluation/yolo/evaluator.py` - Evaluation class (imported by scripts)
+  - `src/data/preprocessing.py` - Data processing class (imported by scripts)
+  - `src/training/yolo/checkpoint_manager.py` - Checkpoint utilities (imported)
+
+**📋 Usage Pattern:**
+```python
+# Scripts (executable)
+python scripts/yolo/train_yolov3_baseline.py --config configs/yolov3/baseline_config.yaml
+
+# Source code (imported)
+from src.training.yolo.trainer import YOLOTrainer
+from src.evaluation.yolo.evaluator import YOLOEvaluator
+from src.data.preprocessing import PokemonDataPreprocessor
+
+# Use imported classes
+trainer = YOLOTrainer(config)
+evaluator = YOLOEvaluator(model)
+```
+
+**🎯 Benefits of This Organization:**
+- **Scripts**: Easy to run, self-contained, specific tasks
+- **Source Code**: Reusable, testable, modular components
+- **Clear Separation**: Executable vs importable code
+- **Maintainability**: Changes to source code affect all scripts
+- **Testing**: Unit tests for source code, integration tests for scripts
 
 #### Dataset Sources & Organization
 1. **Complete Dataset**: All 1025 Pokemon (generations 1-9)
@@ -247,6 +293,119 @@ pokedex/
 - **Training Setup**: Configure YOLOv3 with 1025 classes and original blog parameters
 - **Baseline Establishment**: Reproduce original blog results as baseline
 - **Improvement Pipeline**: Implement enhanced training after baseline
+- **W&B Integration**: Comprehensive experiment tracking and monitoring
+- **Checkpoint Management**: Save and resume training from checkpoints
+- **Performance Monitoring**: Real-time metrics and visualization
+
+**YOLO Training Configuration (PLANNED):**
+- **Framework**: Ultralytics YOLO with custom training loop
+- **Model**: YOLOv3 with 1025 classes (all Pokemon generations)
+- **Dataset**: liuhuanjim013/pokemon-yolo-1025 from Hugging Face
+- **Training Parameters**: Original blog parameters for baseline reproduction
+- **W&B Tracking**: Comprehensive experiment monitoring and visualization
+- **Checkpoint Strategy**: Save every 10 epochs, resume from latest checkpoint
+- **Performance Metrics**: mAP, accuracy, loss curves, confusion matrix
+- **Resource Management**: Optimize for Colab GPU memory constraints
+
+**Original Blog Analysis (UPDATED):**
+Based on https://www.cnblogs.com/xianmasamasa/p/18995912:
+- **Model**: Mx_yolo 3.0.0 binary (proprietary, we'll replace with ultralytics)
+- **Classes**: 1025 (all generations 1-9) - author used full dataset but only made 386 public
+- **Hardware**: Sipeed Maix Bit RISC-V CPU
+- **Training**: 100 epochs, batch_size=16, lr=0.001
+- **Augmentation**: Minimal (only horizontal flip, no rotation/shear/mosaic/mixup)
+- **Scheduling**: No learning rate scheduling
+- **Early Stopping**: None
+- **Limitations**: Poor performance in low light, size sensitivity, background interference
+
+**Baseline Configuration (EXACT REPRODUCTION):**
+```yaml
+# Exact original blog parameters (no assumptions)
+model:
+  name: "yolov3"
+  classes: 1025  # Original: all generations 1-9
+  img_size: 416
+  pretrained: true
+
+training:
+  epochs: 100
+  batch_size: 16
+  learning_rate: 0.001
+  weight_decay: 0.0005
+  
+  # Original augmentation (minimal)
+  augmentation:
+    hsv_h: 0.015
+    hsv_s: 0.7
+    hsv_v: 0.4
+    degrees: 0.0  # No rotation
+    translate: 0.0  # No translation
+    scale: 0.5
+    shear: 0.0  # No shear
+    perspective: 0.0
+    flipud: 0.0
+    fliplr: 0.5  # Only horizontal flip
+    mosaic: 0.0  # No mosaic
+    mixup: 0.0  # No mixup
+  
+  # Original limitations
+  scheduler: "none"  # No scheduling
+  early_stopping: "none"  # No early stopping
+```
+
+**Improved Configuration (ENHANCED):**
+```yaml
+# Enhanced parameters to address original limitations
+model:
+  name: "yolov3"
+  classes: 1025  # All generations (same as original)
+  img_size: 416
+  pretrained: true
+
+training:
+  epochs: 200
+  batch_size: 32
+  learning_rate: 0.001
+  weight_decay: 0.0005
+  
+  # Enhanced augmentation
+  augmentation:
+    hsv_h: 0.015
+    hsv_s: 0.7
+    hsv_v: 0.4
+    degrees: 10.0  # Rotation
+    translate: 0.2  # Translation
+    scale: 0.9
+    shear: 2.0  # Shear
+    perspective: 0.001
+    flipud: 0.5
+    fliplr: 0.5
+    mosaic: 1.0  # Mosaic
+    mixup: 0.1  # Mixup
+  
+  # Enhanced training
+  scheduler: "cosine"
+  warmup_epochs: 5
+  early_stopping:
+    patience: 10
+    min_delta: 0.001
+```
+
+**W&B Integration Strategy:**
+- **Project Name**: "pokemon-classifier"
+- **Experiment Tracking**: Baseline vs improved training runs
+- **Metrics Logging**: Loss, accuracy, learning rate, validation metrics
+- **Artifact Management**: Model checkpoints, training logs, evaluation results
+- **Dashboard**: Real-time training progress and comparison views
+- **Sweep Configuration**: Hyperparameter optimization for improvements
+
+**Checkpoint Management Strategy:**
+- **Save Frequency**: Every 10 epochs (configurable)
+- **Storage**: Google Drive integration for persistent storage
+- **Resume Capability**: Automatic detection and loading of latest checkpoint
+- **Version Control**: Checkpoint metadata with training configuration
+- **Cleanup**: Automatic cleanup of old checkpoints to save space
+- **Backup**: Critical checkpoints backed up to Hugging Face Hub
 
 **YOLO Classification Format Issues (NEEDS FIX):**
 - **Format**: Classification format is correct for Pokemon classification
@@ -763,6 +922,157 @@ python scripts/upload_model.py --model models/final/ --name pokemon-classifier-c
 git add .
 git commit -m "Add model training pipeline"
 git push origin main
+```
+
+### 12. Authentication & Environment Setup
+
+#### Authentication Strategy
+- **Hugging Face Authentication**:
+  ```python
+  # Authentication Flow:
+  1. Validate token format (must start with 'hf_', 31-40 chars)
+  2. Set up git credential helper (git config --global credential.helper store)
+  3. Login with CLI (hf auth login --token $TOKEN --add-to-git-credential)
+  4. Verify login with api.whoami()
+  5. Test dataset access with load_dataset()
+  ```
+  - **Token Storage**:
+    - Primary: `~/.huggingface/token`
+    - Cache: `~/.cache/huggingface/token`
+    - Git: `~/.git-credentials`
+  - **Environment Variables**:
+    - Primary: `HUGGINGFACE_TOKEN`
+    - Alternative: `HF_TOKEN`
+  - **Token Validation**:
+    - Format: Must start with `hf_`
+    - Length: 31-40 characters
+    - Example: `hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+  - **Git Credentials**:
+    - Required for push operations
+    - Set up with `git config --global credential.helper store`
+    - Verified during login with `--add-to-git-credential`
+  - **Token Permissions**:
+    - Read: Dataset access, model downloads
+    - Write: Dataset uploads, model pushes
+    - Verify with `api.whoami()`
+
+- **W&B Authentication**:
+  ```python
+  # Priority order:
+  1. WANDB_API_KEY environment variable
+  2. wandb login() call
+  ```
+  - **Token Storage**: `~/.netrc` file
+  - **Environment Variable**: `WANDB_API_KEY`
+  - **Project Setup**: "pokemon-classifier" with experiment-specific runs
+
+- **Google Colab Integration**:
+  - Mount Google Drive for persistent storage
+  - Set secrets in Colab for `HUGGINGFACE_TOKEN` and `WANDB_API_KEY`
+  - Use centralized setup script for consistent environment
+
+#### Environment Setup Strategy
+- **Conda Environment**:
+  ```bash
+  # In Colab: Install to /content/miniconda3
+  # Local: Install to ~/miniconda3
+  ```
+  - **Environment Name**: pokemon-classifier
+  - **Python Version**: 3.9
+  - **Package Manager**: uv for faster installs
+
+- **Dependencies Installation**:
+  ```python
+  # Order of operations:
+  1. Install conda (if needed)
+  2. Create environment
+  3. Install uv
+  4. Install dependencies via uv
+  ```
+  - **Base Requirements**: `requirements.txt`
+  - **Experiment Requirements**: `requirements/yolo_requirements.txt`
+
+### 13. Notebook Workflow & Environment Setup
+
+#### Notebook Environment Setup Strategy
+All Jupyter notebooks should use the centralized environment setup script for consistency:
+
+**✅ Correct Approach:**
+```python
+# In notebook cells - Use centralized setup script
+!python scripts/common/setup_environment.py --experiment yolo --colab
+```
+
+**❌ Avoid:**
+```python
+# Don't use manual pip installs or separate setup scripts
+!pip install ultralytics wandb datasets  # Inconsistent with architecture
+```
+
+#### Notebook-to-Script Relationship
+- **Notebooks**: Interactive development and experimentation in `notebooks/`
+- **Scripts**: Production-ready execution scripts in `scripts/`
+- **Source Code**: Reusable modules imported by both in `src/`
+
+#### Colab Workflow Pattern
+```python
+# 1. Environment Setup (use centralized script)
+!python scripts/common/setup_environment.py --experiment yolo --colab
+
+# 2. Import source modules (consistent with local dev)
+import sys
+sys.path.append('/content/pokedex/src')
+from training.yolo.trainer import YOLOTrainer
+
+# 3. Use same configs as scripts
+trainer = YOLOTrainer('configs/yolov3/baseline_config.yaml')
+
+# 4. Execute training (same logic as scripts)
+results = trainer.train()
+```
+
+#### Benefits of Centralized Setup
+- **Consistency**: Same environment across local dev, notebooks, and scripts
+- **Maintainability**: Single point of dependency management
+- **Reproducibility**: Identical environments ensure reproducible results
+- **Requirements Integration**: Properly uses `requirements/yolo_requirements.txt`
+- **Conda + uv Pattern**: Follows architecture design principles
+
+#### Notebook Special Rules
+- **Cell Types**: Alternate between markdown (documentation) and code (execution)
+- **Markdown Quality**: Use proper headers, lists, code blocks, and formatting
+- **Code Comments**: Every code cell must have descriptive comments
+- **Error Handling**: All code cells must include proper error handling
+- **Drive Integration**: Mount and use Google Drive for persistent storage
+- **W&B Setup**: Initialize W&B with proper project/experiment names
+- **Checkpoint Management**: Save and load checkpoints from Drive
+- **Resume Training**: Support resuming from latest checkpoint
+- **Environment Check**: Verify GPU and dependencies before training
+- **Resource Cleanup**: Include cleanup cells for Drive unmounting
+
+#### Notebook Execution Flow
+```python
+# 1. Environment & Resource Setup
+- Mount Google Drive
+- Set up environment (setup_environment.py)
+- Initialize W&B
+- Verify GPU and dependencies
+
+# 2. Training Preparation
+- Load configuration
+- Initialize trainer
+- Load latest checkpoint (if resuming)
+
+# 3. Training Execution
+- Execute training with checkpointing
+- Monitor and log progress
+- Handle interruptions gracefully
+
+# 4. Results & Cleanup
+- Save final results
+- Upload artifacts to W&B
+- Clean up resources
+- Unmount Drive
 ```
 
 ## Research References and Limitations

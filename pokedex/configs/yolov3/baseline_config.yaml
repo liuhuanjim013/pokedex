@@ -1,0 +1,63 @@
+# Baseline Configuration - Exact Original Blog Reproduction
+# Based on: https://www.cnblogs.com/xianmasamasa/p/18995912
+# Goal: Reproduce original blog results exactly with 1025 classes
+
+model:
+  name: "yolov3"
+  classes: 1025  # Original: all generations 1-9
+  img_size: 416
+  pretrained: true
+
+training:
+  epochs: 100
+  batch_size: 16
+  learning_rate: 0.001
+  weight_decay: 0.0005
+  
+  # Original augmentation (minimal)
+  augmentation:
+    hsv_h: 0.015
+    hsv_s: 0.7
+    hsv_v: 0.4
+    degrees: 0.0  # No rotation
+    translate: 0.0  # No translation
+    scale: 0.5
+    shear: 0.0  # No shear
+    perspective: 0.0
+    flipud: 0.0
+    fliplr: 0.5  # Only horizontal flip
+    mosaic: 0.0  # No mosaic
+    mixup: 0.0  # No mixup
+  
+  # Original limitations
+  scheduler: "none"  # No scheduling
+  early_stopping: "none"  # No early stopping
+
+data:
+  dataset: "liuhuanjim013/pokemon-yolo-1025"
+  train_split: 0.7
+  val_split: 0.15
+  test_split: 0.15
+
+wandb:
+  project: "pokemon-classifier"
+  name: "yolov3-baseline-reproduction"
+  entity: "liuhuanjim013"
+  tags: ["yolov3", "baseline", "reproduction", "1025-classes"]
+
+checkpoint:
+  save_frequency: 10
+  save_dir: "/content/drive/checkpoints"
+  max_checkpoints: 5
+
+# Original limitations (for reference)
+original_limitations:
+  - "Poor performance in low light"
+  - "Sensitive to object size"
+  - "Background interference"
+  - "Limited recognition accuracy"
+  - "Dataset quality issues"
+  - "Used Mx_yolo 3.0.0 binary (proprietary)"
+  - "No advanced augmentation"
+  - "No learning rate scheduling"
+  - "No early stopping" 

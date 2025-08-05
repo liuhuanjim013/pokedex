@@ -1,0 +1,63 @@
+# Improved Configuration - Enhanced Training Parameters
+# Goal: Address original blog limitations with enhanced training
+# Based on: https://www.cnblogs.com/xianmasamasa/p/18995912
+
+model:
+  name: "yolov3"
+  classes: 1025  # All generations (same as original)
+  img_size: 416
+  pretrained: true
+
+training:
+  epochs: 200
+  batch_size: 32
+  learning_rate: 0.001
+  weight_decay: 0.0005
+  
+  # Enhanced augmentation to address original limitations
+  augmentation:
+    hsv_h: 0.015
+    hsv_s: 0.7
+    hsv_v: 0.4
+    degrees: 10.0  # Rotation (addresses size sensitivity)
+    translate: 0.2  # Translation (addresses position sensitivity)
+    scale: 0.9
+    shear: 2.0  # Shear (addresses angle sensitivity)
+    perspective: 0.001
+    flipud: 0.5
+    fliplr: 0.5
+    mosaic: 1.0  # Mosaic (addresses background interference)
+    mixup: 0.1  # Mixup (improves generalization)
+  
+  # Enhanced training to address original limitations
+  scheduler: "cosine"
+  warmup_epochs: 5
+  early_stopping:
+    patience: 10
+    min_delta: 0.001
+
+data:
+  dataset: "liuhuanjim013/pokemon-yolo-1025"
+  train_split: 0.7
+  val_split: 0.15
+  test_split: 0.15
+
+wandb:
+  project: "pokemon-classifier"
+  name: "yolov3-improved-training"
+  entity: "liuhuanjim013"
+  tags: ["yolov3", "improved", "enhanced", "1025-classes"]
+
+checkpoint:
+  save_frequency: 10
+  save_dir: "/content/drive/checkpoints"
+  max_checkpoints: 5
+
+# Improvements to address original limitations
+improvements:
+  - "Enhanced augmentation (rotation, shear, mosaic, mixup)"
+  - "Cosine learning rate scheduling with warmup"
+  - "Early stopping to prevent overfitting"
+  - "Larger batch size for better gradient estimates"
+  - "Longer training (200 epochs vs 100)"
+  - "Better regularization techniques" 
