@@ -1,0 +1,112 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# W&B
+wandb/
+*.wandb
+
+# Data files (too large for GitHub)
+data/raw/
+data/processed/
+data/splits/
+
+# Model files and checkpoints (in pokedex/models/)
+pokedex/models/checkpoints/
+pokedex/models/final/
+pokedex/models/compressed/
+!pokedex/models/configs/  # Keep model configs in git
+
+# No files in root except documentation
+/*
+!/.gitignore
+!/ARCHITECTURE.md
+!/TASKS.md
+!/README.md
+!/LICENSE
+!/.cursorrules
+!/pokedex/  # Allow pokedex directory
+
+# Cache directories
+.cache/
+.local/
+.conda/
+.uv/
+
+# Dataset files
+*.jpg
+*.png
+*.jpeg
+*.bmp
+*.tiff
+*.webp
+
+# Large archives
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Processed datasets
+yolo_dataset/
+clip_dataset/
+smolvm_dataset/
+
+# Downloaded model weights and assets
+*.pt
+*.pth
+*.onnx
+*.tflite
+*.h5
+*.hdf5
+*.weights
+*.bin
+*.pb
+
+# Logs
+logs/
+*.log
+*.out
+
+# Temporary files
+tmp/
+temp/
+
+# OS
+.DS_Store
+Thumbs.db

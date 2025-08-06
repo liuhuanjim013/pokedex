@@ -32,6 +32,12 @@ Build a real-time Pokemon classifier that can identify 1025 Pokemon species from
    - ✅ License: CC BY-NC-SA 4.0 (Creative Commons)
    - ✅ Citation requirements for both original and this dataset
    - ✅ Usage example created for Google Colab training
+   - ✅ Optimized upload process with multiprocessing (8 workers)
+   - ✅ Added O(1) lookup tables for raw-to-processed mapping
+   - ✅ Implemented batched processing (100 images per batch)
+   - ✅ Added detailed progress tracking with percentages
+   - ✅ Fixed Hugging Face API changes for dataset card handling
+   - ✅ Improved error handling and validation
 
 ### 🎯 CURRENT PRIORITY: YOLO Training in Google Colab (ASAP)
 **Priority**: CRITICAL  
@@ -57,16 +63,53 @@ Build a real-time Pokemon classifier that can identify 1025 Pokemon species from
   - [x] Set up git credential helper (store)
   - [x] Test push access to Hugging Face
   - [x] Document git credential setup
-- [x] **W&B Authentication**:
+- [x] **W&B Authentication & Integration**:
   - [x] Set up W&B project and API key
-  - [x] Test experiment tracking (run-20250806_094807-wqakzrbo)
+  - [x] Test experiment tracking (run-20250806_101644-lnoe0hkj)
   - [x] Configure project structure
-  - [x] Set up run resumption
+  - [x] Set up run resumption with run ID persistence
+  - [x] Configure offline mode fallback with environment variable
+  - [x] Verify metrics-only logging works
+  - [x] Implement W&B resume from saved run ID
+  - [x] Add run ID persistence to disk for resume
+  - [x] Test W&B resume functionality
+  - [x] Implement singleton pattern for W&B integration
+  - [x] Add proper environment variable handling
+  - [x] Ensure string conversion for run IDs
+  - [x] Add comprehensive error handling
+  - [x] Test all W&B resume scenarios
+  - [x] Document W&B integration patterns
+  - [x] Implement accurate step counting during resume
+  - [x] Add checkpoint metadata with W&B run ID
+  - [x] Track both saved and actual epochs
+  - [x] Handle mid-epoch interruptions
+  - [x] Support forcing new run with --force-new-run
+  - [x] Add checkpoint matching by W&B run ID
+  - [x] Maintain metrics continuity during resume
+  - [x] Test all resume scenarios (checkpoint, run ID, latest)
 - [x] **Dataset Access**:
   - [x] Verify dataset loading works
   - [x] List dataset files successfully
   - [x] Confirm training examples count
   - [x] Document dataset structure
+
+#### Model Loading & Training Resume (COMPLETED):
+- [x] **Model Loading Strategy**:
+  - [x] Implement robust model loading with fallbacks
+  - [x] Add local cache support with cleanup
+  - [x] Support multiple Ultralytics asset URLs
+  - [x] Add YAML fallback for model creation
+  - [x] Test model loading with invalid paths
+  - [x] Add comprehensive error handling
+  - [x] Document model loading strategy
+- [x] **Training Resume**:
+  - [x] Implement checkpoint management
+  - [x] Add W&B run ID persistence
+  - [x] Support resuming from specific checkpoints
+  - [x] Add automatic latest checkpoint detection
+  - [x] Implement W&B run resumption
+  - [x] Test resume functionality
+  - [x] Document resume strategy
 
 #### Critical Priority (Next 1-2 days):
 - [ ] **Update existing configs** to match new architecture
@@ -770,10 +813,12 @@ Based on the [blog post](https://www.cnblogs.com/xianmasamasa/p/18995912), the o
 # 3. Web scraping for additional data
 # Sites: 52poke.com, pokemondb.net, pokemon.fandom.com
 
-# 4. Convert to YOLO classification format
+# 4. Convert to YOLO detection format with full-image boxes
 def prepare_yolo_dataset():
-    # Convert images to YOLO classification format
-    # Not detection format, but classification format
+    # Convert images to YOLO detection format
+    # Use full-image bounding boxes (0.5 0.5 1.0 1.0)
+    # Class IDs are 0-based (0-1024)
+    # Example: "0 0.5 0.5 1.0 1.0" for Bulbasaur
     pass
 ```
 

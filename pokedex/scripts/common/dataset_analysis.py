@@ -12,7 +12,8 @@ import numpy as np
 from pathlib import Path
 from PIL import Image
 import cv2
-from collections import Counter
+from collections import Counter, defaultdict
+import re
 import pandas as pd
 
 def load_dataset_statistics():
@@ -658,155 +659,366 @@ def create_content_visualization(content_stats):
     
     print("✅ Content verification visualization saved: data/raw/content_verification.png")
 
-def verify_yolo_dataset_format():
-    """Verify YOLO dataset format and structure"""
+def validate_yolo_dataset_structure():
+    """
+    Validate YOLO dataset against requirements in ARCHITECTURE.md.
     
-    print("🔍 Verifying YOLO dataset format...")
+    Requirements:
+    1. Directory structure
+    2. Image format (416x416, JPEG)
+    3. File naming convention
+    4. Label format
+    5. Split ratios (70/15/15 per Pokemon)
+    6. Class mapping (0-based)
+    """
+    print("🔍 Validating YOLO dataset structure...")
     
-    yolo_stats = {
-        'dataset_exists': False,
-        'structure_correct': False,
-        'label_format_correct': False,
-        'class_indices_correct': False,
-        'image_label_pairs': 0,
-        'total_classes': 0,
-        'format_issues': [],
-        'verification_results': {}
+    validation_results = {
+        'directory_structure': {'status': False, 'issues': []},
+        'image_format': {'status': False, 'issues': []},
+        'file_naming': {'status': False, 'issues': []},
+        'label_format': {'status': False, 'issues': []},
+        'split_ratios': {'status': False, 'issues': []},
+        'class_mapping': {'status': False, 'issues': []},
+        'statistics': {
+            'total_images': 0,
+            'total_labels': 0,
+            'pokemon_counts': defaultdict(lambda: {'train': 0, 'validation': 0, 'test': 0})
+        }
     }
     
-    yolo_path = Path("data/processed/yolo_dataset/")
+    # Get repo root and construct absolute path
+    repo_root = Path(__file__).resolve().parents[3]
+    base_path = repo_root / "pokedex" / "data" / "processed" / "yolo_dataset"
+    print(f"Looking for dataset in: {base_path}")
+    if not base_path.exists():
+        validation_results['directory_structure']['issues'].append("❌ Base directory not found")
+        return validation_results
     
-    if not yolo_path.exists():
-        yolo_stats['format_issues'].append("YOLO dataset directory does not exist")
-        return yolo_stats
+    # 1. Validate directory structure
+    required_dirs = [
+        'train/images', 'validation/images', 'test/images',
+        'train/labels', 'validation/labels', 'test/labels'
+    ]
     
-    yolo_stats['dataset_exists'] = True
-    
-    # Check directory structure
-    required_dirs = ['images/train', 'images/val', 'images/test', 
-                    'labels/train', 'labels/val', 'labels/test']
-    
-    structure_correct = True
     for dir_path in required_dirs:
-        if not (yolo_path / dir_path).exists():
-            structure_correct = False
-            yolo_stats['format_issues'].append(f"Missing directory: {dir_path}")
+        full_path = base_path / dir_path
+        if not full_path.exists():
+            validation_results['directory_structure']['issues'].append(f"❌ Missing directory: {dir_path}")
     
-    yolo_stats['structure_correct'] = structure_correct
+    if not validation_results['directory_structure']['issues']:
+        validation_results['directory_structure']['status'] = True
     
-    # Check classes.txt
-    classes_file = yolo_path / "classes.txt"
-    if classes_file.exists():
-        with open(classes_file, 'r') as f:
-            classes = [line.strip() for line in f.readlines()]
-        yolo_stats['total_classes'] = len(classes)
+    # 2. Validate image format and naming convention
+    name_pattern = re.compile(r'^(\d{4})_(\d+)\.jpg$')
+    
+    for split in ['train', 'validation', 'test']:
+        img_dir = base_path / split / 'images'
+        label_dir = base_path / split / 'labels'
         
-        if len(classes) == 1025:
-            yolo_stats['verification_results']['classes_count'] = "✅ Correct (1025 classes)"
-        else:
-            yolo_stats['verification_results']['classes_count'] = f"❌ Wrong count: {len(classes)} (expected 1025)"
-    else:
-        yolo_stats['format_issues'].append("Missing classes.txt file")
-    
-    # Check label format
-    label_files = list((yolo_path / "labels/train").glob("*.txt"))
-    if label_files:
-        sample_label = label_files[0]
-        with open(sample_label, 'r') as f:
-            content = f.read().strip()
-        
-        # Check if format is: <class_id> <x_center> <y_center> <width> <height>
-        parts = content.split()
-        if len(parts) == 5:
+        if not img_dir.exists() or not label_dir.exists():
+            continue
+            
+        for img_path in img_dir.glob('*.jpg'):
+            validation_results['statistics']['total_images'] += 1
+            
+            # Check naming convention
+            if not name_pattern.match(img_path.name):
+                validation_results['file_naming']['issues'].append(
+                    f"❌ Invalid filename format: {img_path.name}"
+                )
+                continue
+            
+            # Extract Pokemon ID
+            pokemon_id = int(img_path.stem.split('_')[0])
+            validation_results['statistics']['pokemon_counts'][pokemon_id][split] += 1
+            
             try:
-                class_id = int(parts[0])
-                x_center = float(parts[1])
-                y_center = float(parts[2])
-                width = float(parts[3])
-                height = float(parts[4])
-                
-                if 0 <= class_id < 1025 and 0 <= x_center <= 1 and 0 <= y_center <= 1 and 0 <= width <= 1 and 0 <= height <= 1:
-                    yolo_stats['label_format_correct'] = True
-                    yolo_stats['verification_results']['label_format'] = "✅ Correct YOLO detection format"
-                else:
-                    yolo_stats['format_issues'].append(f"Invalid label values: {content}")
-            except ValueError:
-                yolo_stats['format_issues'].append(f"Invalid label format: {content}")
+                with Image.open(img_path) as img:
+                    # Check image size
+                    if img.size != (416, 416):
+                        validation_results['image_format']['issues'].append(
+                            f"❌ Wrong image size in {img_path.name}: {img.size}"
+                        )
+                    
+                    # Check format
+                    if img.format != 'JPEG':
+                        validation_results['image_format']['issues'].append(
+                            f"❌ Wrong image format in {img_path.name}: {img.format}"
+                        )
+            except Exception as e:
+                validation_results['image_format']['issues'].append(
+                    f"❌ Error reading {img_path.name}: {str(e)}"
+                )
+    
+    if not validation_results['image_format']['issues']:
+        validation_results['image_format']['status'] = True
+    if not validation_results['file_naming']['issues']:
+        validation_results['file_naming']['status'] = True
+    
+    # 3. Validate label format
+    label_pattern = re.compile(r'^\d+\s+0\.5\s+0\.5\s+1\.0\s+1\.0\s*$')
+    
+    for split in ['train', 'validation', 'test']:
+        label_dir = base_path / split / 'labels'
+        if not label_dir.exists():
+            continue
+            
+        for label_path in label_dir.glob('*.txt'):
+            validation_results['statistics']['total_labels'] += 1
+            
+            try:
+                with open(label_path) as f:
+                    content = f.read().strip()
+                    
+                    # Check format
+                    if not label_pattern.match(content):
+                        validation_results['label_format']['issues'].append(
+                            f"❌ Invalid label format in {label_path.name}: {content}"
+                        )
+                        continue
+                    
+                    # Check class ID range
+                    class_id = int(content.split()[0])
+                    if not 0 <= class_id <= 1024:
+                        validation_results['class_mapping']['issues'].append(
+                            f"❌ Invalid class ID in {label_path.name}: {class_id}"
+                        )
+                    
+                    # Check corresponding image exists
+                    img_path = base_path / split / 'images' / f"{label_path.stem}.jpg"
+                    if not img_path.exists():
+                        validation_results['file_naming']['issues'].append(
+                            f"❌ Missing image for label: {label_path.name}"
+                        )
+                        
+            except Exception as e:
+                validation_results['label_format']['issues'].append(
+                    f"❌ Error reading {label_path.name}: {str(e)}"
+                )
+    
+    if not validation_results['label_format']['issues']:
+        validation_results['label_format']['status'] = True
+    if not validation_results['class_mapping']['issues']:
+        validation_results['class_mapping']['status'] = True
+    
+    # 4. Validate split ratios
+    for pokemon_id, counts in validation_results['statistics']['pokemon_counts'].items():
+        total = sum(counts.values())
+        if total == 0:
+            continue
+            
+        train_ratio = counts['train'] / total
+        val_ratio = counts['validation'] / total
+        test_ratio = counts['test'] / total
+        
+        # For Pokemon with few images, be more lenient with ratios
+        if total < 3:
+            # For very few images, all should be in train
+            if counts['train'] == 0:
+                validation_results['split_ratios']['issues'].append(
+                    f"❌ No training images for Pokemon {pokemon_id}"
+                )
+        elif total < 6:
+            # For few images, should have at least 1 in each split
+            if counts['train'] == 0:
+                validation_results['split_ratios']['issues'].append(
+                    f"❌ No training images for Pokemon {pokemon_id}"
+                )
+            if counts['validation'] == 0:
+                validation_results['split_ratios']['issues'].append(
+                    f"❌ No validation images for Pokemon {pokemon_id} (has {total} images)"
+                )
+            if counts['test'] == 0:
+                validation_results['split_ratios']['issues'].append(
+                    f"❌ No test images for Pokemon {pokemon_id} (has {total} images)"
+                )
+        elif total < 20:
+            # For small numbers, be very lenient with ratios
+            if not (0.60 <= train_ratio <= 0.80):
+                validation_results['split_ratios']['issues'].append(
+                    f"❌ Wrong train split for Pokemon {pokemon_id}: {train_ratio:.2%}"
+                )
+            if not (0.05 <= val_ratio <= 0.25):
+                validation_results['split_ratios']['issues'].append(
+                    f"❌ Wrong validation split for Pokemon {pokemon_id}: {val_ratio:.2%}"
+                )
+            if not (0.05 <= test_ratio <= 0.25):
+                validation_results['split_ratios']['issues'].append(
+                    f"❌ Wrong test split for Pokemon {pokemon_id}: {test_ratio:.2%}"
+                )
         else:
-            yolo_stats['format_issues'].append(f"Wrong number of values in label: {content}")
+            # For Pokemon with enough images, check ratios with 5% tolerance
+            if not (0.65 <= train_ratio <= 0.75):
+                validation_results['split_ratios']['issues'].append(
+                    f"❌ Wrong train split for Pokemon {pokemon_id}: {train_ratio:.2%}"
+                )
+            if not (0.10 <= val_ratio <= 0.20):
+                validation_results['split_ratios']['issues'].append(
+                    f"❌ Wrong validation split for Pokemon {pokemon_id}: {val_ratio:.2%}"
+                )
+            if not (0.10 <= test_ratio <= 0.20):
+                validation_results['split_ratios']['issues'].append(
+                    f"❌ Wrong test split for Pokemon {pokemon_id}: {test_ratio:.2%}"
+                )
     
-    # Count image-label pairs
-    train_images = len(list((yolo_path / "images/train").glob("*.jpg")))
-    train_labels = len(list((yolo_path / "labels/train").glob("*.txt")))
+    if not validation_results['split_ratios']['issues']:
+        validation_results['split_ratios']['status'] = True
     
-    if train_images == train_labels:
-        yolo_stats['image_label_pairs'] = train_images
-        yolo_stats['verification_results']['pairs'] = f"✅ {train_images} image-label pairs"
+    # Save validation results
+    repo_root = Path(__file__).resolve().parents[3]
+    output_path = repo_root / "pokedex" / "data" / "processed" / "yolo_dataset" / "validation_results.json"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    with open(output_path, "w") as f:
+        # Convert defaultdict to regular dict for JSON serialization
+        validation_results['statistics']['pokemon_counts'] = dict(validation_results['statistics']['pokemon_counts'])
+        json.dump(validation_results, f, indent=2)
+    
+    # Analyze split issues
+    missing_splits = defaultdict(list)
+    for pokemon_id, counts in validation_results['statistics']['pokemon_counts'].items():
+        total = sum(counts.values())
+        if counts['validation'] == 0:
+            missing_splits['validation'].append((pokemon_id, total))
+        if counts['test'] == 0:
+            missing_splits['test'].append((pokemon_id, total))
+
+    # Print summary
+    print("\n📊 YOLO Dataset Validation Results:")
+    for check, result in validation_results.items():
+        if check == 'statistics':
+            continue
+        status = "✅" if result['status'] else "❌"
+        print(f"\n{status} {check.replace('_', ' ').title()}:")
+        
+        if check == 'split_ratios' and (missing_splits['validation'] or missing_splits['test']):
+            print("\n❌ Pokemon missing splits:")
+            if missing_splits['validation']:
+                print("\nMissing validation split:")
+                for pokemon_id, total in sorted(missing_splits['validation']):
+                    print(f"  • Pokemon {pokemon_id+1:04d}: {total} total images")
+            if missing_splits['test']:
+                print("\nMissing test split:")
+                for pokemon_id, total in sorted(missing_splits['test']):
+                    print(f"  • Pokemon {pokemon_id+1:04d}: {total} total images")
+        elif not result['status']:
+            for issue in result['issues'][:5]:  # Show first 5 issues
+                print(f"  • {issue}")
+            if len(result['issues']) > 5:
+                print(f"  • ... and {len(result['issues'])-5} more issues")
+    
+    print(f"\n📈 Statistics:")
+    print(f"  • Total images: {validation_results['statistics']['total_images']}")
+    print(f"  • Total labels: {validation_results['statistics']['total_labels']}")
+    print(f"  • Pokemon with data: {len(validation_results['statistics']['pokemon_counts'])}")
+    
+    return validation_results
+
+def create_validation_visualization(validation_results):
+    """Create visualizations for validation results."""
+    if not validation_results:
+        return
+        
+    # Create figure with subplots
+    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+    fig.suptitle('YOLO Dataset Validation Results', fontsize=16)
+    
+    # 1. Validation Status Overview
+    check_results = {
+        k: v['status'] 
+        for k, v in validation_results.items() 
+        if k != 'statistics'
+    }
+    
+    status_colors = ['lightgreen' if v else 'lightcoral' for v in check_results.values()]
+    axes[0, 0].bar(range(len(check_results)), 
+                  [1 if v else 0 for v in check_results.values()],
+                  tick_label=[k.replace('_', '\n') for k in check_results.keys()],
+                  color=status_colors)
+    axes[0, 0].set_title('Validation Checks Status')
+    axes[0, 0].set_ylim(0, 1.2)
+    for i, v in enumerate(check_results.values()):
+        axes[0, 0].text(i, 0.5, '✓' if v else '✗', 
+                       ha='center', va='center', fontsize=12)
+    
+    # 2. Split Distribution
+    pokemon_counts = validation_results['statistics']['pokemon_counts']
+    splits_data = {
+        'train': [],
+        'validation': [],
+        'test': []
+    }
+    
+    for pokemon_data in pokemon_counts.values():
+        for split, count in pokemon_data.items():
+            splits_data[split].append(count)
+    
+    axes[0, 1].boxplot([splits_data[split] for split in ['train', 'validation', 'test']],
+                      labels=['Train', 'Validation', 'Test'])
+    axes[0, 1].set_title('Images per Split Distribution')
+    axes[0, 1].set_ylabel('Number of Images')
+    
+    # 3. Pokemon Coverage
+    pokemon_totals = [sum(counts.values()) for counts in pokemon_counts.values()]
+    if pokemon_totals:
+        axes[1, 0].hist(pokemon_totals, bins=30, color='skyblue', edgecolor='black')
+        axes[1, 0].set_title('Images per Pokemon Distribution')
+        axes[1, 0].set_xlabel('Number of Images')
+        axes[1, 0].set_ylabel('Number of Pokemon')
+        
+        # Calculate statistics
+        avg_images = np.mean(pokemon_totals) if pokemon_totals else 0
+        min_images = min(pokemon_totals) if pokemon_totals else 0
+        max_images = max(pokemon_totals) if pokemon_totals else 0
     else:
-        yolo_stats['format_issues'].append(f"Mismatched image-label pairs: {train_images} images, {train_labels} labels")
+        axes[1, 0].text(0.5, 0.5, 'No Pokemon data available',
+                       ha='center', va='center')
+        axes[1, 0].set_title('Images per Pokemon Distribution')
+        avg_images = min_images = max_images = 0
     
-    # Save YOLO verification results
-    with open("data/raw/yolo_format_verification.json", "w") as f:
-        json.dump(yolo_stats, f, indent=2)
+    # 4. Summary Statistics
+    summary_text = f"""
+    Dataset Summary:
+    • Total Images: {validation_results['statistics']['total_images']:,}
+    • Total Labels: {validation_results['statistics']['total_labels']:,}
+    • Pokemon Coverage: {len(pokemon_counts):,}/1025
+    • Avg Images/Pokemon: {avg_images:.1f}
+    • Min Images/Pokemon: {min_images}
+    • Max Images/Pokemon: {max_images}
+    """
+    axes[1, 1].text(0.1, 0.5, summary_text, transform=axes[1, 1].transAxes,
+                   fontsize=10, verticalalignment='center',
+                   bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgray"))
+    axes[1, 1].set_title('Dataset Statistics')
+    axes[1, 1].axis('off')
     
-    print("✅ YOLO format verification complete:")
-    print(f"  • Dataset exists: {yolo_stats['dataset_exists']}")
-    print(f"  • Structure correct: {yolo_stats['structure_correct']}")
-    print(f"  • Label format correct: {yolo_stats['label_format_correct']}")
-    print(f"  • Total classes: {yolo_stats['total_classes']}")
-    print(f"  • Image-label pairs: {yolo_stats['image_label_pairs']}")
-    print(f"  • Format issues: {len(yolo_stats['format_issues'])}")
+    plt.tight_layout()
     
-    return yolo_stats
+    # Save visualization
+    repo_root = Path(__file__).resolve().parents[3]
+    output_path = repo_root / "pokedex" / "data" / "processed" / "yolo_dataset" / "validation_results.png"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    print(f"✅ Validation visualization saved: {output_path}")
 
 def main():
     """Main analysis function"""
+    print("🔬 Starting YOLO dataset validation...")
     
-    print("🔬 Starting comprehensive dataset analysis...")
+    # Validate YOLO dataset
+    validation_results = validate_yolo_dataset_structure()
     
-    # Load existing statistics
-    stats = load_dataset_statistics()
+    # Create validation visualization
+    create_validation_visualization(validation_results)
     
-    # Create visualizations
-    create_image_count_visualization(stats)
-    
-    # Assess quality
-    quality_stats = assess_image_quality()
-    create_quality_visualization(quality_stats)
-    
-    # Identify biases
-    biases = identify_data_biases()
-    
-    # Plan augmentation
-    augmentation_plan = plan_data_augmentation()
-    
-    # Create splits
-    splits = create_train_val_test_splits()
-    
-    # Verify image content (NEW)
-    content_stats = verify_image_content()
-    create_content_visualization(content_stats)
-    
-    # Verify YOLO dataset format (NEW)
-    yolo_stats = verify_yolo_dataset_format()
-    
-    # Generate report
-    generate_analysis_report()
-    
-    print("\n✅ Dataset analysis complete!")
+    print("\n✅ Validation complete!")
     print("\n📊 Generated files:")
-    print("  • data/raw/image_distribution_analysis.png")
-    print("  • data/raw/quality_assessment.png")
-    print("  • data/raw/quality_assessment.json")
-    print("  • data/raw/bias_analysis.json")
-    print("  • data/raw/augmentation_plan.json")
-    print("  • data/raw/dataset_splits.json")
-    print("  • data/raw/content_verification.png")
-    print("  • data/raw/content_verification.json")
-    print("  • data/raw/yolo_format_verification.json")
-    print("  • data/raw/analysis_report.md")
-    
-    print("\n🎯 Ready for Task 2.1: Data Processing & Validation")
+    print("  • data/processed/yolo_dataset/validation_results.json")
+    print("  • data/processed/yolo_dataset/validation_results.png")
 
 if __name__ == "__main__":
     main() 

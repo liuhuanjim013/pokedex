@@ -136,9 +136,14 @@ def verify_installation(env_name="pokemon-classifier"):
     print("🔍 Verifying installation...")
     
     required_packages = [
+        # Core ML packages
         "numpy", "pandas", "matplotlib", "seaborn", 
         "PIL", "cv2", "torch", "transformers",
-        "datasets", "huggingface_hub", "ultralytics"
+        "datasets", "huggingface_hub", "ultralytics",
+        # Network resilience packages
+        "backoff", "requests", "urllib3",
+        # Progress tracking
+        "tqdm", "rich"
     ]
     
     missing_packages = []
@@ -174,7 +179,11 @@ def install_huggingface_dependencies(env_name="pokemon-classifier"):
         # Install datasets and huggingface_hub
         subprocess.check_call([
             "conda", "run", "-n", env_name, "uv", "pip", "install", 
-            "datasets", "huggingface_hub"
+            "datasets", "huggingface_hub",
+            # Network resilience packages
+            "backoff", "requests", "urllib3",
+            # Progress tracking
+            "tqdm", "rich"
         ])
         print("✅ Hugging Face dependencies installed successfully!")
         return True

@@ -92,7 +92,13 @@ def setup_environment():
         # Then install critical packages using uv in the conda environment
         subprocess.check_call([
             "conda", "run", "-n", "pokemon-classifier",
-            "uv", "pip", "install", "ultralytics", "wandb", "huggingface_hub"
+            "uv", "pip", "install",
+            # Core ML packages
+            "ultralytics", "wandb", "huggingface_hub",
+            # Network resilience packages
+            "backoff", "requests", "urllib3",
+            # Progress tracking
+            "tqdm", "rich"
         ])
         print("✅ Critical packages installed with uv")
     except subprocess.CalledProcessError as e:

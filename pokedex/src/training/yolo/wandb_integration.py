@@ -15,31 +15,98 @@ logger = logging.getLogger(__name__)
 
 class WandBIntegration:
     """W&B integration for experiment tracking and visualization."""
+    _instance = None
     
-    def __init__(self, config: Dict[str, Any]):
+    def __new__(cls, config: Dict[str, Any], resume_id: Optional[str] = None):
+        """Create or return singleton instance."""
+        if cls._instance is None:
+            cls._instance = super(WandBIntegration, cls).__new__(cls)
+            cls._instance.initialized = False
+        return cls._instance
+    
+    def __init__(self, config: Dict[str, Any], resume_id: Optional[str] = None):
         """Initialize W&B integration with configuration."""
+        if self.initialized:
+            return
+            
         self.config = config
         self.run = None
-        self._init_experiment()
-    
-    def _init_experiment(self):
-        """Initialize W&B experiment."""
         try:
-            self.run = wandb.init(
-                project=self.config['project'],
-                name=self.config['name'],
-                entity=self.config.get('entity'),
-                tags=self.config.get('tags', []),
-                config=self.config,
-                reinit=True
-            )
-            
-            logger.info(f"W&B experiment initialized: {self.run.name}")
-            logger.info(f"Project: {self.config['project']}, Run: {self.config['name']}")
-            
+            self._init_experiment(resume_id)
+            self.initialized = True
         except Exception as e:
-            logger.error(f"Failed to initialize W&B: {e}")
-            self.run = None
+            self.finish()  # Clean up on initialization error
+            raise
+    
+    def _init_experiment(self, resume_id: Optional[str] = None):
+        """Initialize W&B experiment."""
+        # Base init kwargs
+        init_kwargs = {
+            'project': self.config['project'],
+            'name': self.config['name'],
+            'entity': self.config.get('entity'),
+            'tags': self.config.get('tags', []),
+            'config': self.config,
+            'reinit': True
+        }
+        
+        # Add resume ID if provided
+        if resume_id:
+            init_kwargs.update({
+                'id': resume_id,
+                'resume': 'must'
+            })
+        
+        import os
+        
+        def try_init(mode: str = None) -> bool:
+            """Try to initialize W&B with given mode."""
+            try:
+                # Clean up any existing run
+                if wandb.run is not None:
+                    wandb.finish()
+                
+                # Set or clear mode
+                if mode:
+                    os.environ['WANDB_MODE'] = mode
+                elif 'WANDB_MODE' in os.environ:
+                    del os.environ['WANDB_MODE']
+                    
+                # Try to initialize
+                self.run = wandb.init(**init_kwargs)
+                
+                if self.run:
+                    # Save run ID for future resume
+                    run_id_file = Path("wandb_run_id.txt")
+                    with open(run_id_file, "w") as f:
+                        f.write(str(self.run.id))
+                    logger.info(f"W&B initialized in {mode or 'online'} mode")
+                    return True
+                    
+            except Exception as e:
+                # Check for permission error
+                if "permission denied" in str(e).lower() or "403" in str(e):
+                    logger.error("W&B permission error. Please check your API key and entity access.")
+                    logger.error("Try running: wandb login --relogin")
+                    # Clean up run on permission error
+                    if wandb.run is not None:
+                        wandb.finish()
+                else:
+                    logger.error(f"Failed to initialize W&B in {mode or 'online'} mode: {e}")
+                return False
+            
+            return False
+        
+        # First try online mode
+        if try_init():
+            return
+            
+        # If online fails, try offline mode
+        if try_init('offline'):
+            return
+            
+        # If both fail, raise error
+        raise RuntimeError("Failed to initialize W&B in both online and offline modes")
     
     def log_metrics(self, epoch: int, train_loss: float, val_metrics: Dict[str, Any]):
         """

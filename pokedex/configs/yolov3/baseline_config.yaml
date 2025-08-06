@@ -3,7 +3,8 @@
 # Goal: Reproduce original blog results exactly with 1025 classes
 
 model:
-  name: "yolov3"
+  name: "yolov3.pt"  # Standard YOLOv3 model
+  weights: "yolov3.pt"  # Base weights from Ultralytics hub
   classes: 1025  # Original: all generations 1-9
   img_size: 416
   pretrained: true
@@ -42,12 +43,15 @@ data:
 wandb:
   project: "pokemon-classifier"
   name: "yolov3-baseline-reproduction"
-  entity: "liuhuanjim013"
+  entity: "liuhuanjim013-self"  # Your personal username
   tags: ["yolov3", "baseline", "reproduction", "1025-classes"]
+  settings:
+    save_code: false  # Don't save code
+    disable_git: true  # Don't track git
 
 checkpoint:
   save_frequency: 10
-  save_dir: "/content/drive/checkpoints"
+  save_dir: "/home/liuhuan/models/checkpoints"  # Absolute path for YOLO training
   max_checkpoints: 5
 
 # Original limitations (for reference)

@@ -1,171 +1,88 @@
 # Pokemon Classifier Project Rules
 
-## File Placement Rules
+## YOLO Training Rules
 
-### ALWAYS CHECK ARCHITECTURE.MD FIRST
-Before creating ANY file or directory, you MUST:
-1. Read the ARCHITECTURE.md file to understand the correct structure
-2. Verify the intended location matches the architecture
-3. Check TASKS.md to understand the current task context
+### Data Configuration
+1. **YOLO Dataset Format Requirements**
+   - Directory: `processed/yolo_dataset/`
+   - Images: 416x416 JPEG in `images/{split}/`
+   - Labels: YOLO format in `labels/{split}/`
+   - Naming: `{pokemon_id}_{image_number:03d}.{ext}` (3-digit padding)
+   - Class IDs: 0-based (0-1024)
+   - Full-image boxes: "0.5 0.5 1.0 1.0"
+   - Multiprocessing: 8 workers, 100 images per batch
+   - Progress Tracking: Percentage complete per split
+   - Lookup Tables: O(1) access for raw-to-processed mapping
 
-### Project Structure (from ARCHITECTURE.md)
-```
-pokedex/
-├── data/                          # Local data storage (gitignored)
-│   ├── raw/                      # Raw downloaded datasets
-│   │   └── all_pokemon/         # All Pokemon data (1025 folders)
-│   ├── processed/                # Shared preprocessed data (gitignored)
-│   └── splits/                  # Train/val/test splits (gitignored)
-├── models/                       # Model storage
-│   ├── checkpoints/             # Training checkpoints (experiment-specific)
-│   ├── final/                   # Final trained models
-│   ├── compressed/              # Optimized for IoT
-│   └── configs/                 # Model configurations
-├── src/                         # Source code
-│   ├── data/                    # Data processing
-│   ├── models/                  # Model implementations
-│   ├── training/                # Training pipelines
-│   ├── evaluation/              # Evaluation code
-│   └── deployment/              # IoT deployment
-├── notebooks/                   # Jupyter notebooks
-├── configs/                     # Configuration files (experiment-specific)
-├── scripts/                     # Utility scripts
-│   ├── yolo/                   # YOLO-specific scripts
-│   ├── vlm/                    # VLM-specific scripts
-│   ├── hybrid/                 # Hybrid-specific scripts
-│   └── common/                 # Common utilities
-├── requirements/                # Dependencies (experiment-specific)
-├── tests/                       # Unit tests
-├── docs/                        # Documentation
-├── .github/                     # GitHub workflows
-├── .gitignore
-├── requirements.txt             # Base requirements
-├── pyproject.toml
-└── README.md
-```
+2. **Dataset Verification**
+   - Check Hugging Face access first
+   - Verify YOLO config format
+   - Validate class count (1025)
+   - Check split names match
+   - Verify per-Pokemon 70/15/15 splits
+   - Validate label format and class IDs
+   - Check image sizes (416x416)
 
-### STRICT RULES
+### Training Process
+1. **Initialization Order**
+   - Verify environment setup
+   - Check dataset access
+   - Initialize W&B tracking
+   - Set up model explicitly
 
-1. **NEVER create files in the parent directory** (same level as ARCHITECTURE.md)
-   - All project files must be inside the `pokedex/` directory
-   - Only ARCHITECTURE.md, TASKS.md, and .git should be at the top level
+2. **Checkpoint Management**
+   - Save metadata with checkpoints
+   - Track W&B run ID
+   - Record actual progress
+   - Handle interruptions
 
-2. **Scripts placement**:
-   - ALL scripts go in `scripts/` directory
-   - Experiment-specific scripts go in `scripts/yolo/`, `scripts/vlm/`, `scripts/hybrid/`
-   - Common utilities go in `scripts/common/`
+### W&B Integration
+1. **Configuration**
+   - Use singleton pattern
+   - Enable offline fallback
+   - Disable code/git tracking
+   - Use personal account
 
-3. **Requirements placement**:
-   - Base requirements: `requirements.txt` (in pokedex root)
-   - Experiment-specific: `requirements/yolo_requirements.txt`, etc.
+2. **Progress Tracking**
+   - Save run ID with checkpoints
+   - Track actual vs saved epochs
+   - Handle mid-epoch crashes
+   - Maintain step counting
 
-4. **Configs placement**:
-   - ALL configs go in `configs/` directory
-   - Experiment-specific: `configs/yolov3/`, `configs/clip/`, etc.
+3. **Resume Strategy**
+   - Try specified checkpoint
+   - Match W&B run ID
+   - Fall back to latest
+   - Support forcing new run
 
-5. **Source code placement**:
-   - ALL source code goes in `src/` directory
-   - Model-specific code: `src/models/yolo/`, `src/models/vlm/`, etc.
+4. **Error Handling**
+   - Clean up on failure
+   - Proper exception handling
+   - Informative messages
+   - Resource cleanup
 
-### Before Creating Any File
+### Testing Requirements
+1. **Training Tests**
+   - Verify setup works
+   - Check arguments
+   - Test data loading
+   - Validate progress
 
-1. **Check ARCHITECTURE.md**: Verify the intended location
-2. **Check TASKS.md**: Understand the current task context
-3. **Verify path**: Ensure the file goes in the correct subdirectory
-4. **Use absolute paths**: Always reference from the pokedex root
+2. **W&B Tests**
+   - Test initialization
+   - Verify resumption
+   - Check offline mode
+   - Validate cleanup
 
-### Environment & Authentication Setup
+3. **Checkpoint Tests**
+   - Test metadata saving
+   - Verify loading
+   - Check progress tracking
+   - Test interruption recovery
 
-#### Environment Management
-- Use conda for environment management
-- Use uv for Python dependency installation
-- Follow the setup script: `scripts/common/setup_environment.py`
-
-#### Authentication Rules
-1. **Hugging Face Authentication**:
-   - **Token Storage**:
-     - Use `HUGGINGFACE_TOKEN` environment variable
-     - Verify token format starts with `hf_`
-     - NEVER hardcode tokens in source code
-     - NEVER commit tokens to git
-   - **Git Credentials**:
-     - ALWAYS set up git credential helper first
-     - Use `git config --global credential.helper store`
-     - Add token to git with `--add-to-git-credential`
-     - Verify git credentials before pushing
-   - **Token Validation**:
-     - Check format with `validate_hf_token()`
-     - Verify login with `api.whoami()`
-     - Test dataset access with `load_dataset()`
-     - Document token permissions and scope
-
-2. **W&B Authentication**:
-   - **API Key**:
-     - Store in `WANDB_API_KEY` environment variable
-     - NEVER hardcode keys in source code
-     - NEVER commit keys to git
-   - **Project Setup**:
-     - Project name: "pokemon-classifier"
-     - Entity: Your W&B username
-     - Run names: Experiment-specific (e.g., "yolov3-baseline")
-     - Tags: ["baseline", "improved", "experiment"]
-   - **Run Management**:
-     - Enable resumption with `resume=True`
-     - Save checkpoints every 10 epochs
-     - Log metrics in real-time
-     - Clean up resources on completion
-
-3. **Token Security**:
-   - **Environment Variables**:
-     - Set in Colab secrets for persistence
-     - Use local `.env` for development
-     - Validate all tokens before use
-     - Clear tokens after use
-   - **File Storage**:
-     - Keep tokens out of notebooks
-     - Use proper token storage locations
-     - Clean up token files after use
-     - Follow security best practices
-   - **Access Control**:
-     - Use read-only tokens when possible
-     - Scope tokens to specific repos
-     - Rotate tokens regularly
-     - Monitor token usage
-
-### Data Organization
-
-- Raw data: `data/raw/all_pokemon/`
-- Processed data: `data/processed/`
-- Splits: `data/splits/`
-- NEVER commit data to Git (use .gitignore)
-
-### Experiment Organization
-
-- YOLO experiments: `scripts/yolo/`, `configs/yolov3/`, `requirements/yolo_requirements.txt`
-- VLM experiments: `scripts/vlm/`, `configs/clip/`, `requirements/vlm_requirements.txt`
-- Hybrid experiments: `scripts/hybrid/`, `configs/hybrid/`, `requirements/hybrid_requirements.txt`
-
-### Verification Checklist
-
-Before creating any file, ask:
-1. ✅ Does this location match ARCHITECTURE.md?
-2. ✅ Is this the correct subdirectory for the file type?
-3. ✅ Am I inside the pokedex/ directory?
-4. ✅ Does this follow the experiment-specific organization?
-5. ✅ Is this file type allowed in this location?
-
-### Common Mistakes to Avoid
-
-- ❌ Creating files in parent directory
-- ❌ Mixing experiment-specific files in wrong directories
-- ❌ Creating scripts outside of scripts/ directory
-- ❌ Creating configs outside of configs/ directory
-- ❌ Creating source code outside of src/ directory
-- ❌ Creating requirements outside of requirements/ directory
-
-### When in Doubt
-
-1. Read ARCHITECTURE.md again
-2. Check TASKS.md for context
-3. Ask for clarification before proceeding
-4. Verify the intended location matches the architecture 
+4. **Dataset Format Tests**
+   - Verify image sizes (416x416)
+   - Check label format
+   - Validate class IDs (0-based)
+   - Verify per-Pokemon splits
+   - Test image-label pairs match
