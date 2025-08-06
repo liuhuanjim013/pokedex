@@ -20,8 +20,13 @@
    - Validate class count (1025)
    - Check split names match
    - Verify per-Pokemon 70/15/15 splits
-   - Validate label format and class IDs
+   - Validate label format and class IDs (0-based)
    - Check image sizes (416x416)
+   - Verify image data types (bytes or PIL)
+   - Skip already processed splits
+   - Show progress with tqdm
+   - Handle errors with descriptive messages
+   - Update config paths dynamically
 
 ### Training Process
 1. **Initialization Order**

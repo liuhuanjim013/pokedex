@@ -209,8 +209,63 @@ def verify_dataset():
     try:
         print("\n📦 Verifying dataset access...")
         # First verify Hugging Face dataset access
-        dataset = load_dataset("liuhuanjim013/pokemon-yolo-1025", split="train[:1]")
+        from datasets import load_dataset
+        import shutil
+        from PIL import Image
+        import io
+
+        # Create YOLO dataset directory
+        yolo_dataset_dir = Path("data/yolo_dataset")
+        yolo_dataset_dir.mkdir(parents=True, exist_ok=True)
+
+        def process_image(example):
+            """Process image data from either raw bytes or PIL Image."""
+            if isinstance(example['image'], dict) and 'bytes' in example['image']:
+                # Raw bytes from HF dataset
+                img_bytes = example['image']['bytes']
+                return Image.open(io.BytesIO(img_bytes))
+            elif isinstance(example['image'], Image.Image):
+                # Already a PIL Image
+                return example['image']
+            else:
+                raise ValueError(f"Unexpected image type: {type(example['image'])}")
+
+        # Load HF dataset
+        dataset = load_dataset("liuhuanjim013/pokemon-yolo-1025")
         print("✅ Hugging Face dataset is accessible")
+
+        # Create directories
+        splits = ['train', 'validation', 'test']
+        for split in splits:
+            (yolo_dataset_dir / split).mkdir(parents=True, exist_ok=True)
+            (yolo_dataset_dir / split / "images").mkdir(parents=True, exist_ok=True)
+            (yolo_dataset_dir / split / "labels").mkdir(parents=True, exist_ok=True)
+
+        # Extract images and labels
+        from tqdm import tqdm
+        for split in splits:
+            print(f"\n📦 Preparing {split} split...")
+            split_data = dataset[split]
+            
+            # Skip if files already exist
+            if (yolo_dataset_dir / split / "images").exists() and \
+               len(list((yolo_dataset_dir / split / "images").glob("*.jpg"))) == len(split_data):
+                print(f"✅ {split} split already prepared, skipping...")
+                continue
+                
+            for i, example in tqdm(enumerate(split_data), total=len(split_data), desc=f"Processing {split} images"):
+                # Process and save image
+                img = process_image(example)
+                img_path = yolo_dataset_dir / split / "images" / f"{example['pokemon_id']:04d}_{i+1:03d}.jpg"
+                img.save(img_path)
+
+                # Save label
+                label_path = yolo_dataset_dir / split / "labels" / f"{example['pokemon_id']:04d}_{i+1:03d}.txt"
+                with open(label_path, 'w') as f:
+                    # YOLO format: class_id x_center y_center width height
+                    f.write(f"{example['label']} 0.5 0.5 1.0 1.0\n")
+
+        print("✅ YOLO dataset prepared")
         
         # Then verify YOLO data config exists
         data_config_path = Path("configs/yolov3/yolo_data.yaml")
@@ -228,6 +283,56 @@ def verify_dataset():
             
         if data_config['nc'] != 1025:
             raise ValueError(f"Wrong number of classes in YOLO data config: {data_config['nc']} (expected 1025)")
+            
+        # Prepare YOLO dataset from HF dataset
+        from datasets import load_dataset
+        import shutil
+        from PIL import Image
+        import io
+
+        # Create YOLO dataset directory
+        yolo_dataset_dir = Path("data/yolo_dataset")
+        yolo_dataset_dir.mkdir(parents=True, exist_ok=True)
+
+        # Load HF dataset
+        dataset = load_dataset(data_config['path'])
+        splits = ['train', 'validation', 'test']
+
+        # Create directories
+        for split in splits:
+            (yolo_dataset_dir / split).mkdir(parents=True, exist_ok=True)
+            (yolo_dataset_dir / split / "images").mkdir(parents=True, exist_ok=True)
+            (yolo_dataset_dir / split / "labels").mkdir(parents=True, exist_ok=True)
+
+        # Extract images and labels
+        for split in splits:
+            print(f"\n📦 Preparing {split} split...")
+            split_data = dataset[split]
+            
+            # Get list of image files
+            image_files = sorted(list((yolo_dataset_dir / split / "images").glob("*.jpg")))
+            
+            # Process each file
+            for i, img_path in enumerate(image_files):
+                # Extract Pokemon ID from filename
+                pokemon_id = int(img_path.stem.split('_')[0])
+                
+                # Process and save image
+                img = Image.open(img_path)
+                img.save(img_path)  # Resave to ensure format
+
+                # Save label
+                label_path = yolo_dataset_dir / split / "labels" / f"{pokemon_id:04d}_{i+1:03d}.txt"
+                with open(label_path, 'w') as f:
+                    # YOLO format: class_id x_center y_center width height
+                    f.write(f"{pokemon_id-1} 0.5 0.5 1.0 1.0\n")
+
+        # Update config to use local dataset
+        data_config['path'] = str(yolo_dataset_dir.absolute())
+        
+        # Save updated config
+        with open(data_config_path, 'w') as f:
+            yaml.safe_dump(data_config, f)
             
         print("\n📋 Dataset Configuration:")
         print("• Classes: 1025 (all generations 1-9)")

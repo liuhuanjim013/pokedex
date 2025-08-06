@@ -168,6 +168,9 @@ raw_data/ → preprocessing.py (multiprocessing) → processed_data/ → model_s
    - Lookup Tables: O(1) access for raw-to-processed mapping
    - Batched Operations: Process images in batches of 100
    - Progress Tracking: Real-time progress with percentage
+   - Caching: Skip already processed splits
+   - Type Handling: Support both raw bytes and PIL Images
+   - Format Validation: Verify image types and formats
 
 2. **Upload Stage**:
    - Network Resilience: Exponential backoff with retries
@@ -178,6 +181,15 @@ raw_data/ → preprocessing.py (multiprocessing) → processed_data/ → model_s
    - Concurrency: 2 workers to prevent timeouts
    - Timeouts: 10-minute timeout per request
    - Buffer Sizes: Increased for large files
+
+3. **Download & Verification Stage**:
+   - Format Conversion: HF dataset → YOLO format
+   - Progress Tracking: tqdm for visual feedback
+   - Caching: Skip existing files
+   - Class ID Handling: Convert to 0-based indexing
+   - Image Processing: Handle both bytes and PIL objects
+   - Error Handling: Type checks and descriptive errors
+   - Config Updates: Dynamic path resolution
 
 # Step 1: Process raw data once (shared across all models)
 raw_data/all_pokemon/ → preprocessing.py → processed_data/images/
