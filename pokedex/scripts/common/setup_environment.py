@@ -17,19 +17,38 @@ def get_project_root():
         current_dir = current_dir.parent
     return current_dir
 
+def get_conda_path():
+    """Get the conda executable path, handling both local and Colab environments"""
+    # Check if we're in a Colab environment with /content installation
+    if os.path.exists("/content/miniconda3/bin/conda"):
+        return "/content/miniconda3/bin/conda"
+    # Check if conda is in PATH
+    try:
+        result = subprocess.run(["which", "conda"], capture_output=True, text=True)
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except:
+        pass
+    # Fallback to common local paths
+    for path in ["/home/liuhuan/miniconda3/bin/conda", "/opt/conda/bin/conda"]:
+        if os.path.exists(path):
+            return path
+    return "conda"  # Fallback to PATH
+
 def create_conda_environment(env_name="pokemon-classifier", python_version="3.9"):
     """Create conda environment for the project"""
     print(f"🐍 Creating conda environment: {env_name}")
     try:
+        conda_path = get_conda_path()
         # Check if environment already exists
-        result = subprocess.run(["conda", "env", "list"], capture_output=True, text=True)
+        result = subprocess.run([conda_path, "env", "list"], capture_output=True, text=True)
         if env_name in result.stdout:
             print(f"✅ Environment {env_name} already exists")
             return True
         
         # Create new environment
         subprocess.check_call([
-            "conda", "create", "-n", env_name, f"python={python_version}", "-y"
+            conda_path, "create", "-n", env_name, f"python={python_version}", "-y"
         ])
         print(f"✅ Conda environment {env_name} created successfully!")
         return True
@@ -41,7 +60,8 @@ def install_uv():
     """Install uv using conda"""
     print("📦 Installing uv...")
     try:
-        subprocess.check_call(["conda", "install", "-c", "conda-forge", "uv", "-y"])
+        conda_path = get_conda_path()
+        subprocess.check_call([conda_path, "install", "-c", "conda-forge", "uv", "-y"])
         print("✅ uv installed successfully!")
         return True
     except subprocess.CalledProcessError as e:
@@ -52,9 +72,10 @@ def install_dependencies_with_uv(requirements_file, env_name="pokemon-classifier
     """Install dependencies using uv in the specified conda environment"""
     print(f"📦 Installing dependencies from {requirements_file}...")
     try:
+        conda_path = get_conda_path()
         # Use conda run to execute uv in the specified environment
         subprocess.check_call([
-            "conda", "run", "-n", env_name, "uv", "pip", "install", "-r", requirements_file
+            conda_path, "run", "-n", env_name, "uv", "pip", "install", "-r", requirements_file
         ])
         print(f"✅ Dependencies installed successfully!")
         return True
@@ -65,6 +86,7 @@ def install_dependencies_with_uv(requirements_file, env_name="pokemon-classifier
 def accept_conda_tos():
     """Accept conda Terms of Service for required channels."""
     print("📜 Accepting conda Terms of Service...")
+    conda_path = get_conda_path()
     channels = [
         "https://repo.anaconda.com/pkgs/main",
         "https://repo.anaconda.com/pkgs/r",
@@ -73,7 +95,7 @@ def accept_conda_tos():
     
     for channel in channels:
         try:
-            subprocess.check_call(["conda", "tos", "accept", "--override-channels", "--channel", channel])
+            subprocess.check_call([conda_path, "tos", "accept", "--override-channels", "--channel", channel])
             print(f"✅ Accepted ToS for {channel}")
         except subprocess.CalledProcessError as e:
             if "Unknown command" in str(e):
@@ -89,8 +111,9 @@ def setup_colab_environment():
     print("☁️  Setting up Google Colab environment...")
     
     # Check if conda is already available
+    conda_path = get_conda_path()
     try:
-        subprocess.check_call(["conda", "--version"])
+        subprocess.check_call([conda_path, "--version"])
         print("✅ Conda is already available")
         return
     except (subprocess.CalledProcessError, FileNotFoundError):
@@ -108,21 +131,38 @@ def setup_colab_environment():
     
     # Install Miniconda
     print("📦 Installing conda...")
+    
+    # Check if we're in a Colab environment and use Google Drive for persistence
     conda_install_path = "/content/miniconda3"
-    subprocess.check_call([
-        "bash", installer, "-b", "-p", conda_install_path
-    ])
+    print("📁 Installing conda in /content for local environment...")
     
-    # Add conda to PATH
-    os.environ["PATH"] = f"{conda_install_path}/bin:" + os.environ.get("PATH", "")
+    # Check if conda directory already exists
+    if os.path.exists(conda_install_path):
+        print(f"✅ Conda already installed at {conda_install_path}")
+        # Add conda to PATH if not already there
+        if f"{conda_install_path}/bin" not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = f"{conda_install_path}/bin:" + os.environ.get("PATH", "")
+    else:
+        # Install Miniconda only if directory doesn't exist
+        subprocess.check_call([
+            "bash", installer, "-b", "-p", conda_install_path
+        ])
+        
+        # Add conda to PATH
+        os.environ["PATH"] = f"{conda_install_path}/bin:" + os.environ.get("PATH", "")
+        
+        # Initialize conda for shell
+        subprocess.check_call([conda_path, "init"])
+        
+        print("✅ Conda installed successfully")
     
-    # Initialize conda for shell
-    subprocess.check_call([f"{conda_install_path}/bin/conda", "init"])
+    # Ensure conda is in PATH for all subsequent operations
+    if f"{conda_install_path}/bin" not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = f"{conda_install_path}/bin:" + os.environ.get("PATH", "")
     
     # Clean up installer
-    os.remove(installer)
-    
-    print("✅ Conda installed successfully")
+    if os.path.exists(installer):
+        os.remove(installer)
     
     # Accept Terms of Service
     if not accept_conda_tos():
@@ -135,6 +175,7 @@ def verify_installation(env_name="pokemon-classifier"):
     """Verify that key packages are installed in the conda environment"""
     print("🔍 Verifying installation...")
     
+    conda_path = get_conda_path()
     required_packages = [
         # Core ML packages
         "numpy", "pandas", "matplotlib", "seaborn", 
@@ -152,7 +193,7 @@ def verify_installation(env_name="pokemon-classifier"):
         try:
             # Use conda run to check imports in the specified environment
             result = subprocess.run([
-                "conda", "run", "-n", env_name, "python", "-c", 
+                conda_path, "run", "-n", env_name, "python", "-c", 
                 f"import {package}; print('OK')"
             ], capture_output=True, text=True)
             
@@ -176,9 +217,10 @@ def install_huggingface_dependencies(env_name="pokemon-classifier"):
     """Install Hugging Face dependencies for dataset upload"""
     print("📦 Installing Hugging Face dependencies...")
     try:
+        conda_path = get_conda_path()
         # Install datasets and huggingface_hub
         subprocess.check_call([
-            "conda", "run", "-n", env_name, "uv", "pip", "install", 
+            conda_path, "run", "-n", env_name, "uv", "pip", "install", 
             "datasets", "huggingface_hub",
             # Network resilience packages
             "backoff", "requests", "urllib3",
@@ -195,9 +237,10 @@ def install_yolo_dependencies(env_name="pokemon-classifier"):
     """Install YOLO training dependencies"""
     print("📦 Installing YOLO training dependencies...")
     try:
+        conda_path = get_conda_path()
         # Install ultralytics for YOLO training
         subprocess.check_call([
-            "conda", "run", "-n", env_name, "uv", "pip", "install", 
+            conda_path, "run", "-n", env_name, "uv", "pip", "install", 
             "ultralytics", "wandb"
         ])
         print("✅ YOLO training dependencies installed successfully!")

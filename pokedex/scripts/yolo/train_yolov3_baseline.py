@@ -46,10 +46,12 @@ def is_colab():
         return False, None
 
 def get_storage_dirs():
-    """Get storage directories (assumes setup_colab_training.py was run)."""
+    """Get storage directories (creates them if they don't exist)."""
     try:
         # Get the root directory (where the repository is)
         root_dir = os.path.dirname(os.path.dirname(os.getcwd()))
+        print(f"🔍 Current working directory: {os.getcwd()}")
+        print(f"🔍 Root directory: {root_dir}")
         
         # Get project directories relative to root
         dirs = {
@@ -58,11 +60,17 @@ def get_storage_dirs():
             'models': os.path.join(root_dir, 'models', 'final')
         }
         
-        # Verify directories exist (should have been created by setup script)
+        print(f"🔍 Directory paths:")
+        for name, path in dirs.items():
+            print(f"  • {name}: {path}")
+        
+        # Create directories if they don't exist
         for name, path in dirs.items():
             if not os.path.exists(path):
-                raise RuntimeError(f"Directory not found: {path}. Did you run setup_colab_training.py first?")
-            print(f"✅ Found {name} directory: {path}")
+                os.makedirs(path, exist_ok=True)
+                print(f"📁 Created {name} directory: {path}")
+            else:
+                print(f"✅ Found {name} directory: {path}")
         
         return dirs
     except Exception as e:
@@ -248,22 +256,31 @@ def verify_dataset():
             split_data = dataset[split]
             
             # Skip if files already exist
-            if (yolo_dataset_dir / split / "images").exists() and \
-               len(list((yolo_dataset_dir / split / "images").glob("*.jpg"))) == len(split_data):
-                print(f"✅ {split} split already prepared, skipping...")
-                continue
+            try:
+                if (yolo_dataset_dir / split / "images").exists() and \
+                   len(list((yolo_dataset_dir / split / "images").glob("*.jpg"))) == len(split_data):
+                    print(f"✅ {split} split already prepared, skipping...")
+                    continue
+            except OSError as e:
+                print(f"❌ I/O error checking {split} split: {e}")
+                print("🔄 Will re-process this split due to I/O issues...")
                 
             for i, example in tqdm(enumerate(split_data), total=len(split_data), desc=f"Processing {split} images"):
-                # Process and save image
-                img = process_image(example)
-                img_path = yolo_dataset_dir / split / "images" / f"{example['pokemon_id']:04d}_{i+1:03d}.jpg"
-                img.save(img_path)
+                try:
+                    # Process and save image
+                    img = process_image(example)
+                    img_path = yolo_dataset_dir / split / "images" / f"{example['pokemon_id']:04d}_{i+1:03d}.jpg"
+                    img.save(img_path)
 
-                # Save label
-                label_path = yolo_dataset_dir / split / "labels" / f"{example['pokemon_id']:04d}_{i+1:03d}.txt"
-                with open(label_path, 'w') as f:
-                    # YOLO format: class_id x_center y_center width height
-                    f.write(f"{example['label']} 0.5 0.5 1.0 1.0\n")
+                    # Save label
+                    label_path = yolo_dataset_dir / split / "labels" / f"{example['pokemon_id']:04d}_{i+1:03d}.txt"
+                    with open(label_path, 'w') as f:
+                        # YOLO format: class_id x_center y_center width height
+                        f.write(f"{example['label']} 0.5 0.5 1.0 1.0\n")
+                except OSError as e:
+                    print(f"❌ I/O error processing example {i} in {split} split: {e}")
+                    print("🔄 This might be a Google Drive issue. Continuing...")
+                    continue
 
         print("✅ YOLO dataset prepared")
         
@@ -284,6 +301,9 @@ def verify_dataset():
         if data_config['nc'] != 1025:
             raise ValueError(f"Wrong number of classes in YOLO data config: {data_config['nc']} (expected 1025)")
             
+        # Update the path to use current working directory
+        data_config['path'] = str(Path.cwd() / "data" / "yolo_dataset")
+            
         # Prepare YOLO dataset from HF dataset
         from datasets import load_dataset
         import shutil
@@ -294,38 +314,96 @@ def verify_dataset():
         yolo_dataset_dir = Path("data/yolo_dataset")
         yolo_dataset_dir.mkdir(parents=True, exist_ok=True)
 
-        # Load HF dataset
-        dataset = load_dataset(data_config['path'])
+        # Check if YOLO dataset already exists
         splits = ['train', 'validation', 'test']
-
-        # Create directories
+        dataset_exists = True
+        total_files = 0
+        
+        print("🔍 Checking for existing YOLO dataset...")
         for split in splits:
-            (yolo_dataset_dir / split).mkdir(parents=True, exist_ok=True)
-            (yolo_dataset_dir / split / "images").mkdir(parents=True, exist_ok=True)
-            (yolo_dataset_dir / split / "labels").mkdir(parents=True, exist_ok=True)
-
-        # Extract images and labels
-        for split in splits:
-            print(f"\n📦 Preparing {split} split...")
-            split_data = dataset[split]
+            split_dir = yolo_dataset_dir / split
+            images_dir = split_dir / "images"
+            labels_dir = split_dir / "labels"
             
-            # Get list of image files
-            image_files = sorted(list((yolo_dataset_dir / split / "images").glob("*.jpg")))
-            
-            # Process each file
-            for i, img_path in enumerate(image_files):
-                # Extract Pokemon ID from filename
-                pokemon_id = int(img_path.stem.split('_')[0])
+            # Check if both images and labels exist
+            if not (images_dir.exists() and labels_dir.exists()):
+                print(f"❌ Missing directories for {split} split")
+                dataset_exists = False
+                break
                 
-                # Process and save image
-                img = Image.open(img_path)
-                img.save(img_path)  # Resave to ensure format
+            # Check if there are files in both directories (with error handling for Google Drive)
+            try:
+                image_files = list(images_dir.glob("*.jpg"))
+                label_files = list(labels_dir.glob("*.txt"))
+                
+                if not image_files or not label_files:
+                    print(f"❌ Missing files for {split} split (images: {len(image_files)}, labels: {len(label_files)})")
+                    dataset_exists = False
+                    break
+                    
+                print(f"✅ Found {len(image_files)} images and {len(label_files)} labels for {split} split")
+                total_files += len(image_files)
+            except OSError as e:
+                print(f"❌ I/O error accessing {split} split: {e}")
+                print("🔄 This might be a Google Drive issue. Will re-download dataset...")
+                dataset_exists = False
+                break
+        
+        if dataset_exists:
+            print(f"✅ YOLO dataset already exists locally ({total_files} total files), skipping download and processing")
+            print("🚀 Proceeding directly to training...")
+            print(f"📁 Dataset path: {yolo_dataset_dir.absolute()}")
+            print(f"📁 Config path: {data_config_path.absolute()}")
+            
+            # Debug: Show what's actually in the directories
+            for split in splits:
+                split_dir = yolo_dataset_dir / split
+                images_dir = split_dir / "images"
+                labels_dir = split_dir / "labels"
+                try:
+                    print(f"🔍 {split}: {len(list(images_dir.glob('*.jpg')))} images, {len(list(labels_dir.glob('*.txt')))} labels")
+                except OSError as e:
+                    print(f"❌ I/O error checking {split}: {e}")
+                    print("🔄 Will re-download dataset due to I/O issues...")
+                    dataset_exists = False
+                    break
+        else:
+            print("📦 YOLO dataset not found locally, downloading from Hugging Face...")
+            
+            # Load HF dataset from Hugging Face
+            dataset = load_dataset("liuhuanjim013/pokemon-yolo-1025")
+            
+            # Create directories
+            for split in splits:
+                (yolo_dataset_dir / split).mkdir(parents=True, exist_ok=True)
+                (yolo_dataset_dir / split / "images").mkdir(parents=True, exist_ok=True)
+                (yolo_dataset_dir / split / "labels").mkdir(parents=True, exist_ok=True)
 
-                # Save label
-                label_path = yolo_dataset_dir / split / "labels" / f"{pokemon_id:04d}_{i+1:03d}.txt"
-                with open(label_path, 'w') as f:
-                    # YOLO format: class_id x_center y_center width height
-                    f.write(f"{pokemon_id-1} 0.5 0.5 1.0 1.0\n")
+            # Extract images and labels
+            for split in splits:
+                print(f"\n📦 Preparing {split} split...")
+                split_data = dataset[split]
+                
+                            # Process each example
+            for i, example in enumerate(split_data):
+                try:
+                    # Extract Pokemon ID and image
+                    pokemon_id = example['pokemon_id']
+                    image = example['image']
+                    
+                    # Save image
+                    img_path = yolo_dataset_dir / split / "images" / f"{pokemon_id:04d}_{i+1:03d}.jpg"
+                    image.save(img_path)
+                    
+                    # Save label
+                    label_path = yolo_dataset_dir / split / "labels" / f"{pokemon_id:04d}_{i+1:03d}.txt"
+                    with open(label_path, 'w') as f:
+                        # YOLO format: class_id x_center y_center width height
+                        f.write(f"{pokemon_id-1} 0.5 0.5 1.0 1.0\n")
+                except OSError as e:
+                    print(f"❌ I/O error processing example {i} in {split} split: {e}")
+                    print("🔄 This might be a Google Drive issue. Continuing...")
+                    continue
 
         # Update config to use local dataset
         data_config['path'] = str(yolo_dataset_dir.absolute())
@@ -333,6 +411,8 @@ def verify_dataset():
         # Save updated config
         with open(data_config_path, 'w') as f:
             yaml.safe_dump(data_config, f)
+            
+        print(f"📝 Updated data config path to: {data_config['path']}")
             
         print("\n📋 Dataset Configuration:")
         print("• Classes: 1025 (all generations 1-9)")

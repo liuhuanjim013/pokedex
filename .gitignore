@@ -60,7 +60,6 @@ pokedex/models/compressed/
 !/README.md
 !/LICENSE
 !/.cursorrules
-!/pokedex/  # Allow pokedex directory
 
 # Cache directories
 .cache/

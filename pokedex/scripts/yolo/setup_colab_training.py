@@ -10,51 +10,34 @@ import os
 import sys
 import subprocess
 from pathlib import Path
+
 def is_colab():
     """Check if running in Google Colab."""
     try:
-        from google.colab import drive
-        return True, drive
-    except (ImportError, ModuleNotFoundError):
-        return False, None
+        # Check if we're in a Colab environment by looking for specific paths
+        if os.path.exists('/usr/local/lib/python3.*/dist-packages/google/colab'):
+            return True
+        return False
+    except Exception:
+        return False
+
 import wandb
 
 def setup_storage():
-    """Set up storage directories."""
+    """Get storage configuration."""
     try:
-        is_colab_env, drive_module = is_colab()
-        
-        # Get the repository root (pokedex/pokedex)
+        is_colab_env = is_colab()
         repo_root = Path(__file__).resolve().parents[2]
         
-        if is_colab_env:
-            # Mount drive and use Colab paths
-            drive_module.mount('/content/drive')
-            base_dir = Path('/content/drive/MyDrive/pokemon_yolo')
-            print("✅ Google Drive mounted successfully!")
-            print("✅ Using Google Drive storage")
-        else:
-            # Use local paths inside the repository
-            base_dir = repo_root
-            print("✅ Using local repository storage")
-        
-        # Create project directories
+        # Just return the paths without trying to create/verify
         dirs = {
-            'checkpoints': base_dir / 'models' / 'checkpoints',
-            'logs': base_dir / 'models' / 'logs',
-            'models': base_dir / 'models' / 'final'
+            'checkpoints': repo_root / 'models' / 'checkpoints',
+            'logs': repo_root / 'models' / 'logs',
+            'models': repo_root / 'models' / 'final'
         }
-        
-        # Create directories and verify
-        for name, path in dirs.items():
-            path.mkdir(parents=True, exist_ok=True)
-            if not path.exists():
-                raise RuntimeError(f"Failed to create {name} directory at {path}")
-            print(f"📁 {name.capitalize()} directory: {path}")
-        
         return dirs, is_colab_env
     except Exception as e:
-        print(f"❌ Failed to set up storage: {e}")
+        print(f"❌ Failed to get storage config: {e}")
         raise
 
 def verify_repository():
@@ -90,8 +73,29 @@ def setup_environment():
         print("✅ Environment setup completed using centralized script")
         
         # Then install critical packages using uv in the conda environment
+        # Get conda path directly
+        def get_conda_path():
+            """Get the conda executable path, handling both local and Colab environments"""
+            # Check if we're in a Colab environment with /content installation
+            if os.path.exists("/content/miniconda3/bin/conda"):
+                return "/content/miniconda3/bin/conda"
+            # Check if conda is in PATH
+            try:
+                result = subprocess.run(["which", "conda"], capture_output=True, text=True)
+                if result.returncode == 0:
+                    return result.stdout.strip()
+            except:
+                pass
+            # Fallback to common local paths
+            for path in ["/home/liuhuan/miniconda3/bin/conda", "/opt/conda/bin/conda"]:
+                if os.path.exists(path):
+                    return path
+            return "conda"  # Fallback to PATH
+        
+        conda_path = get_conda_path()
+        
         subprocess.check_call([
-            "conda", "run", "-n", "pokemon-classifier",
+            conda_path, "run", "-n", "pokemon-classifier",
             "uv", "pip", "install",
             # Core ML packages
             "ultralytics", "wandb", "huggingface_hub",
@@ -101,6 +105,14 @@ def setup_environment():
             "tqdm", "rich"
         ])
         print("✅ Critical packages installed with uv")
+        
+        # Test that we can run Python in the conda environment
+        conda_path = get_conda_path()
+        subprocess.check_call([
+            conda_path, "run", "-n", "pokemon-classifier",
+            "python", "-c", "import ultralytics; print('✅ ultralytics available')"
+        ])
+        
     except subprocess.CalledProcessError as e:
         print(f"❌ Environment setup failed: {e}")
         raise
@@ -108,33 +120,62 @@ def setup_environment():
 def verify_gpu(is_colab: bool):
     """Verify GPU availability and CUDA setup."""
     try:
-        import torch
+        # Get conda path
+        def get_conda_path():
+            """Get the conda executable path, handling both local and Colab environments"""
+            # Check if we're in a Colab environment with /content installation
+            if os.path.exists("/content/miniconda3/bin/conda"):
+                return "/content/miniconda3/bin/conda"
+            # Check if conda is in PATH
+            try:
+                result = subprocess.run(["which", "conda"], capture_output=True, text=True)
+                if result.returncode == 0:
+                    return result.stdout.strip()
+            except:
+                pass
+            # Fallback to common local paths
+            for path in ["/home/liuhuan/miniconda3/bin/conda", "/opt/conda/bin/conda"]:
+                if os.path.exists(path):
+                    return path
+            return "conda"  # Fallback to PATH
         
-        if not torch.cuda.is_available():
-            msg = "No GPU available! Please enable GPU runtime in Colab." if is_colab else "No GPU available!"
-            raise RuntimeError(msg)
+        conda_path = get_conda_path()
         
-        print("🎯 GPU Check:")
-        print(f"• GPU Device: {torch.cuda.get_device_name(0)}")
-        print(f"• CUDA Version: {torch.version.cuda}")
-        print(f"• GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+        # Run GPU verification in conda environment
+        gpu_check_script = """
+import torch
+
+if not torch.cuda.is_available():
+    raise RuntimeError("No GPU available! Please enable GPU runtime in Colab.")
+
+print("🎯 GPU Check:")
+print(f"• GPU Device: {torch.cuda.get_device_name(0)}")
+print(f"• CUDA Version: {torch.version.cuda}")
+print(f"• GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+
+# Test CUDA memory allocation
+print("🧪 Testing CUDA memory...")
+test_tensor = torch.randn(1000, 1000).cuda()  # 4MB test tensor
+del test_tensor
+torch.cuda.empty_cache()
+print("✅ CUDA memory allocation test passed")
+
+# Test CUDA computation
+print("🔢 Testing CUDA computation...")
+x = torch.randn(1000, 1000).cuda()
+y = torch.matmul(x, x.t())
+del x, y
+torch.cuda.empty_cache()
+print("✅ CUDA computation test passed")
+
+print("✅ GPU verification successful")
+"""
         
-        # Test CUDA memory allocation
-        print("\n🧪 Testing CUDA memory...")
-        test_tensor = torch.randn(1000, 1000).cuda()  # 4MB test tensor
-        del test_tensor
-        torch.cuda.empty_cache()
-        print("✅ CUDA memory allocation test passed")
+        subprocess.check_call([
+            conda_path, "run", "-n", "pokemon-classifier",
+            "python", "-c", gpu_check_script
+        ])
         
-        # Test CUDA computation
-        print("\n🔢 Testing CUDA computation...")
-        x = torch.randn(1000, 1000).cuda()
-        y = torch.matmul(x, x.t())
-        del x, y
-        torch.cuda.empty_cache()
-        print("✅ CUDA computation test passed")
-        
-        print("\n✅ GPU verification successful")
     except Exception as e:
         print(f"❌ GPU verification failed: {e}")
         if is_colab:
@@ -145,22 +186,58 @@ def verify_gpu(is_colab: bool):
 def setup_wandb():
     """Set up Weights & Biases for experiment tracking."""
     try:
+        # Get conda path
+        def get_conda_path():
+            """Get the conda executable path, handling both local and Colab environments"""
+            # Check if we're in a Colab environment with /content installation
+            if os.path.exists("/content/miniconda3/bin/conda"):
+                return "/content/miniconda3/bin/conda"
+            # Check if conda is in PATH
+            try:
+                result = subprocess.run(["which", "conda"], capture_output=True, text=True)
+                if result.returncode == 0:
+                    return result.stdout.strip()
+            except:
+                pass
+            # Fallback to common local paths
+            for path in ["/home/liuhuan/miniconda3/bin/conda", "/opt/conda/bin/conda"]:
+                if os.path.exists(path):
+                    return path
+            return "conda"  # Fallback to PATH
+        
+        conda_path = get_conda_path()
+        
         # Check for WANDB_API_KEY in environment
         wandb_token = os.getenv("WANDB_API_KEY")
-        if not wandb_token:
-            print("⚠️ WANDB_API_KEY not found in environment")
-            print("ℹ️ Will prompt for login...")
-            wandb.login()
-        else:
-            print("✅ Found WANDB_API_KEY in environment")
-            wandb.login(key=wandb_token)
         
-        print("✅ W&B login successful")
+        # Run W&B setup in conda environment
+        wandb_setup_script = f"""
+import wandb
+import os
+
+# Check for WANDB_API_KEY in environment
+wandb_token = os.getenv("WANDB_API_KEY")
+if not wandb_token:
+    print("⚠️ WANDB_API_KEY not found in environment")
+    print("ℹ️ Will prompt for login...")
+    wandb.login()
+else:
+    print("✅ Found WANDB_API_KEY in environment")
+    wandb.login(key=wandb_token)
+
+print("✅ W&B login successful")
+
+# Test W&B setup
+test_run = wandb.init(project="pokemon-classifier", name="colab-setup-test")
+test_run.finish()
+print("✅ W&B setup verified")
+"""
         
-        # Test W&B setup
-        test_run = wandb.init(project="pokemon-classifier", name="colab-setup-test")
-        test_run.finish()
-        print("✅ W&B setup verified")
+        subprocess.check_call([
+            conda_path, "run", "-n", "pokemon-classifier",
+            "python", "-c", wandb_setup_script
+        ])
+        
     except Exception as e:
         print(f"❌ W&B setup failed: {e}")
         print("ℹ️ Set WANDB_API_KEY environment variable or run wandb login")
@@ -281,17 +358,8 @@ def print_setup_summary(dirs: dict, is_colab: bool):
     print("🎯 Environment Setup Summary")
     print("="*60)
     
-    print("\n📁 Project Directories:")
-    for name, path in dirs.items():
-        print(f"• {name}: {path}")
-    
     print("\n🔧 Environment Status:")
-    if is_colab:
-        print("• Environment: Google Colab")
-        print("• Storage: Google Drive (mounted)")
-    else:
-        print("• Environment: Local Development")
-        print("• Storage: Local filesystem")
+    print("• Environment:", "Google Colab" if is_colab else "Local Development")
     print("• GPU: Available and verified")
     print("• Dependencies: Installed via setup_environment.py")
     print("• W&B: Configured and tested")
@@ -299,9 +367,11 @@ def print_setup_summary(dirs: dict, is_colab: bool):
     
     print("\n📋 Next Steps:")
     print("1. Run baseline training:")
-    print("   python scripts/yolo/train_yolov3_baseline.py")
+    print("   python scripts/yolo/run_training_in_env.py train_yolov3_baseline.py")
     print("\n2. Run improved training:")
-    print("   python scripts/yolo/train_yolov3_improved.py")
+    print("   python scripts/yolo/run_training_in_env.py train_yolov3_improved.py")
+    print("\n3. Set up experiment:")
+    print("   python scripts/yolo/run_training_in_env.py setup_yolov3_experiment.py")
     
     print("\n" + "="*60)
 

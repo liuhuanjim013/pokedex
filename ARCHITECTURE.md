@@ -302,25 +302,63 @@ git_config = {
 ### Compute Resources
 1. **Development**:
    - Local: RTX 3080
-   - Cloud: Colab Pro+ (A100)
+   - Cloud: Colab Pro+ (A100/L4)
 
-2. **Production Training**:
+2. **Google Colab Setup**:
+   - Conda installation: `/content/miniconda3/` (ephemeral, no Drive persistence)
+   - Environment: `pokemon-classifier` with Python 3.9
+   - Dependencies: ultralytics, torch, wandb, datasets
+   - Storage: Repository files in `/content/pokedex/pokedex/`
+   - Models: Saved to `/content/models/` directories
+
+3. **Production Training**:
    - Cloud: AWS g4dn.xlarge
    - Multi-GPU support
    - Distributed training
 
+### Google Colab Training Configuration
+1. **Environment Setup**:
+   - Conda installation: `/content/miniconda3/` (ephemeral, reinstalled per session)
+   - Environment activation: `source conda.sh && conda activate pokemon-classifier`
+   - PATH management: Dynamic conda path detection (`/content/miniconda3/bin/conda`)
+   - Shell script: `activate_env.sh` for easy activation
+
+2. **Data Persistence**:
+   - Dataset: Downloaded from Hugging Face to `/content/pokedex/pokedex/data/yolo_dataset/`
+   - Models: Saved to `/content/models/` directories
+   - Checkpoints: Local storage (ephemeral per session)
+   - Configurations: Local configs with dynamic path updates
+
+3. **Model Loading Strategy**:
+   - **Primary**: Download YOLOv3 weights from Ultralytics URLs
+   - **Fallback 1**: Load from Ultralytics hub (`YOLO("yolov3")`)
+   - **Fallback 2**: Create from YAML config (`models/configs/yolov3.yaml`)
+   - **Cache management**: Auto-cleanup of corrupted weights
+   - **Path resolution**: Dynamic working directory detection
+
 ### Experiment Tracking
 1. **W&B Integration**:
-   - Metrics logging
-   - Artifact storage
-   - Experiment comparison
-   - Hyperparameter tuning
+   - Metrics logging with Ultralytics built-in integration
+   - Real-time training monitoring (loss, mAP, precision, recall)
+   - Artifact storage for model checkpoints
+   - Experiment comparison between runs
+   - Hyperparameter tuning with sweeps
+   - Run resumption with persistent run IDs
 
 2. **Checkpointing**:
-   - Regular saves (every N epochs)
-   - Best model saves
-   - Resume capability
-   - Model export
+   - Regular saves (every 10 epochs, configurable)
+   - Best model saves with metadata
+   - Resume capability with W&B run ID matching
+   - Model export for deployment
+   - Local storage in Colab (ephemeral per session)
+   - Automatic cleanup of old checkpoints
+
+3. **Training Pipeline Integration**:
+   - Dataset verification and preprocessing
+   - Automatic directory creation
+   - Progress tracking with visual feedback
+   - Error handling for I/O issues (Google Drive)
+   - Dynamic configuration updates
 
 ### Testing Strategy
 1. **Unit Tests**:

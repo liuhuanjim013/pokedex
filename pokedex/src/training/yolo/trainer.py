@@ -131,7 +131,10 @@ class YOLOTrainer:
                             # Try default location
                             yaml_path = Path("models/configs/yolov3.yaml")
                             if not yaml_path.exists():
-                                raise FileNotFoundError(f"Default YAML file not found: {yaml_path}")
+                                # Try relative to current directory
+                                yaml_path = Path.cwd() / "models" / "configs" / "yolov3.yaml"
+                                if not yaml_path.exists():
+                                    raise FileNotFoundError(f"Default YAML file not found: {yaml_path}")
                         
                         self.model = YOLO(str(yaml_path))
                         logger.info("Successfully created model from YAML")
@@ -176,6 +179,16 @@ class YOLOTrainer:
         
         # Start training
         try:
+            # Add custom logging during training
+            if self.wandb_integration and wandb.run:
+                logger.info("Enhanced W&B logging enabled")
+                # Log initial configuration
+                wandb.log({
+                    'config/model': self.config['model'],
+                    'config/training': self.config['training'],
+                    'config/data': self.config['data'],
+                })
+            
             results = self.model.train(**train_args)
             
             # Track training progress
@@ -213,6 +226,14 @@ class YOLOTrainer:
             'lr0': train_config['learning_rate'],
             'weight_decay': train_config['weight_decay'],
             'pretrained': model_config['pretrained'],
+            'plots': True,  # Enable plotting
+            'save_period': 1,  # Save every epoch for better tracking
+            'verbose': True,  # Enable verbose logging
+            'exist_ok': True,  # Overwrite existing runs
+            'patience': 100,  # Early stopping patience
+            'save': True,  # Save checkpoints
+            'save_txt': False,  # Don't save text predictions
+            'save_conf': False,  # Don't save confidence scores
             
             # Augmentation parameters
             'hsv_h': train_config['augmentation']['hsv_h'],

@@ -1,5 +1,29 @@
 # Pokemon Classifier Project Rules
 
+## Google Colab Training Environment
+
+### Environment Setup
+1. **Conda Installation (Ephemeral)**
+   - Install to: `/content/miniconda3/` (reinstalled per session)
+   - Environment: `pokemon-classifier` with Python 3.9
+   - Activation: `source conda.sh && conda activate pokemon-classifier`
+   - Shell script: `activate_env.sh` for easy activation
+   - No Google Drive persistence due to file permission issues
+
+2. **Dynamic Path Management**
+   - Conda path detection: Check `/content/miniconda3/bin/conda` first
+   - Function: `get_conda_path()` in multiple scripts
+   - Primary path: `/content/miniconda3/bin/conda`
+   - Fallback: PATH environment variable detection
+   - PATH updates: Automatic conda binary detection
+
+3. **Storage Strategy**
+   - Repository: `/content/pokedex/pokedex/` for code and configs
+   - Dataset: `/content/pokedex/pokedex/data/yolo_dataset/` from Hugging Face
+   - Models: `/content/models/` directories (ephemeral)
+   - Auto-creation: Required directories (`models/checkpoints`, etc.)
+   - Error handling: I/O error retry logic for large file operations
+
 ## YOLO Training Rules
 
 ### Data Configuration
@@ -28,43 +52,68 @@
    - Handle errors with descriptive messages
    - Update config paths dynamically
 
+### Model Loading Strategy
+1. **YOLOv3 Loading Priority**
+   - **Primary**: Download from Ultralytics asset URLs
+   - **Fallback 1**: Load from Ultralytics hub (`YOLO("yolov3")`)
+   - **Fallback 2**: Create from YAML config (`models/configs/yolov3.yaml`)
+   - **Cache Management**: Auto-cleanup corrupted weights
+   - **Path Resolution**: Dynamic working directory detection
+
+2. **YAML Configuration**
+   - YOLOv3 architecture: `models/configs/yolov3.yaml`
+   - Classes: 1025 (all Pokemon generations)
+   - Anchors: Standard YOLOv3 anchor boxes
+   - Input size: 416x416 pixels
+
 ### Training Process
 1. **Initialization Order**
-   - Verify environment setup
-   - Check dataset access
-   - Initialize W&B tracking
-   - Set up model explicitly
+   - Verify environment setup and conda activation
+   - Check dataset access from Hugging Face
+   - Initialize W&B tracking with run resumption
+   - Set up model with fallback loading strategy
+   - Create required directories automatically
 
 2. **Checkpoint Management**
-   - Save metadata with checkpoints
-   - Track W&B run ID
-   - Record actual progress
-   - Handle interruptions
+   - Save metadata with checkpoints (W&B run ID, epoch, metrics)
+   - Track W&B run ID for resumption
+   - Record actual progress vs saved epochs
+   - Handle mid-epoch interruptions
+   - Local storage (ephemeral per Colab session)
+
+3. **Error Handling**
+   - File I/O errors: Retry with exponential backoff for large operations
+   - Missing conda: Dynamic path detection and helpful messages
+   - Model loading failures: Multiple fallback strategies
+   - Dataset access: Hugging Face authentication and caching
 
 ### W&B Integration
 1. **Configuration**
-   - Use singleton pattern
-   - Enable offline fallback
-   - Disable code/git tracking
-   - Use personal account
+   - Use singleton pattern for initialization
+   - Enable offline fallback with environment variables
+   - Disable code/git tracking for Colab
+   - Use personal account (liuhuanjim013-self)
+   - Project: "pokemon-classifier"
 
-2. **Progress Tracking**
-   - Save run ID with checkpoints
-   - Track actual vs saved epochs
-   - Handle mid-epoch crashes
-   - Maintain step counting
+2. **Metrics Logging**
+   - **Built-in Ultralytics**: Automatic loss, mAP, precision, recall
+   - **Real-time Monitoring**: Live training progress
+   - **System Metrics**: GPU usage, memory consumption
+   - **Custom Logging**: Configuration parameters and experiment metadata
+   - **Run Persistence**: Save run ID to disk for resumption
 
 3. **Resume Strategy**
-   - Try specified checkpoint
-   - Match W&B run ID
-   - Fall back to latest
-   - Support forcing new run
+   - Try specified checkpoint with matching W&B run ID
+   - Match W&B run ID from saved checkpoint metadata
+   - Fall back to latest checkpoint if run ID missing
+   - Support forcing new run with --force-new-run flag
+   - Maintain metrics continuity during resume
 
 4. **Error Handling**
-   - Clean up on failure
-   - Proper exception handling
-   - Informative messages
-   - Resource cleanup
+   - Clean up W&B runs on training failure
+   - Proper exception handling with informative messages
+   - Resource cleanup and session management
+   - Offline mode fallback for network issues
 
 ### Testing Requirements
 1. **Training Tests**
