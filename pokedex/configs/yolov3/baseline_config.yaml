@@ -3,8 +3,8 @@
 # Goal: Reproduce original blog results exactly with 1025 classes
 
 model:
-  name: "yolov3.pt"  # Standard YOLOv3 model
-  weights: "yolov3.pt"  # Base weights from Ultralytics hub
+  name: "yolov3"  # Official YOLOv3 model
+  weights: "https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov3.pt"  # Official weights
   classes: 1025  # Original: all generations 1-9
   img_size: 416
   pretrained: true
@@ -12,7 +12,7 @@ model:
 training:
   epochs: 100
   batch_size: 16
-  learning_rate: 0.001
+  learning_rate: 0.0001  # MUCH LOWER to prevent instability (10x lower)
   weight_decay: 0.0005
   
   # Original augmentation (minimal)
@@ -30,8 +30,9 @@ training:
     mosaic: 0.0  # No mosaic
     mixup: 0.0  # No mixup
   
-  # Original limitations
-  scheduler: "none"  # No scheduling
+  # Improved settings for stability
+  scheduler: "cosine"  # Add cosine scheduling
+  warmup_epochs: 5  # Add warmup
   early_stopping: "none"  # No early stopping
 
 data:

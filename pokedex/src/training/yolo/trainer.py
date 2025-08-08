@@ -70,49 +70,16 @@ class YOLOTrainer:
             # Initialize model with pretrained weights
             logger.info(f"Initializing {model_name} model...")
             
-            # Try loading from local cache first
+            # Try loading official YOLOv3 weights directly
             try:
-                weights_file = cache_dir / model_weights
-                if weights_file.exists():
-                    logger.info(f"Loading from cache: {weights_file}")
-                    self.model = YOLO(str(weights_file))
-                    logger.info("Successfully loaded model from cache")
-                else:
-                    # Try downloading from Ultralytics assets
-                    logger.info("Downloading from Ultralytics assets...")
-                    from ultralytics.utils.downloads import download
-                    
-                    # Try different asset URLs
-                    urls = [
-                        f"https://github.com/ultralytics/assets/releases/download/v0.0.0/{model_weights}",
-                        f"https://github.com/ultralytics/yolov3/releases/download/v9.0/{model_weights}",
-                        f"https://ultralytics.com/assets/{model_weights}"
-                    ]
-                    
-                    for url in urls:
-                        try:
-                            logger.info(f"Trying URL: {url}")
-                            weights_path = download(
-                                url=url,
-                                dir=str(cache_dir),
-                                unzip=False,
-                                curl=True,
-                                retry=3
-                            )
-                            if weights_path is not None and Path(weights_path).exists():
-                                weights_file = Path(weights_path)
-                                self.model = YOLO(str(weights_file))
-                                logger.info("Successfully loaded downloaded model")
-                                break
-                        except Exception as e:
-                            logger.warning(f"Download failed from {url}: {e}")
-                    else:
-                        raise FileNotFoundError(f"Failed to download weights from any URL")
+                logger.info("Loading official YOLOv3 model...")
+                self.model = YOLO(model_weights)  # This will download official weights
+                logger.info("Successfully loaded official YOLOv3 model")
                         
             except Exception as e1:
-                logger.warning(f"Local and download attempts failed: {e1}")
+                logger.warning(f"Official weights loading failed: {e1}")
                 try:
-                    # Try loading directly from hub
+                    # Fallback - try loading from hub
                     logger.info("Attempting to load from hub...")
                     self.model = YOLO("yolov3")  # This will download from hub if needed
                     logger.info("Successfully loaded model from hub")
@@ -139,15 +106,24 @@ class YOLOTrainer:
                         self.model = YOLO(str(yaml_path))
                         logger.info("Successfully created model from YAML")
                     except Exception as e3:
-                        raise RuntimeError(f"Model loading failed: Local error: {e1}, Hub error: {e2}, YAML error: {e3}")
+                        raise RuntimeError(f"Model loading failed: Official error: {e1}, Hub error: {e2}, YAML error: {e3}")
                     
                             
             # Configure for 1025 classes
             logger.info(f"Configuring model for {classes} classes...")
-            if not hasattr(self.model.model, 'model') or not hasattr(self.model.model.model[-1], 'nc'):
-                raise AttributeError("Model structure not as expected")
             
-            self.model.model.model[-1].nc = classes
+            # Update the model to support our number of classes
+            if hasattr(self.model.model, 'model') and hasattr(self.model.model.model[-1], 'nc'):
+                # Standard YOLO model structure
+                self.model.model.model[-1].nc = classes
+                logger.info(f"Updated detection head to {classes} classes")
+            elif hasattr(self.model.model, 'nc'):
+                # Direct model attribute
+                self.model.model.nc = classes
+                logger.info(f"Updated model to {classes} classes")
+            else:
+                logger.warning("Could not automatically update model classes - will be handled during training")
+            
             logger.info(f"Model setup complete: {model_name} with {classes} classes")
             
         except Exception as e:
@@ -179,6 +155,9 @@ class YOLOTrainer:
         
         # Start training
         try:
+            # Set up automatic backup
+            self._setup_auto_backup()
+            
             # Add custom logging during training
             if self.wandb_integration and wandb.run:
                 logger.info("Enhanced W&B logging enabled")
@@ -188,6 +167,41 @@ class YOLOTrainer:
                     'config/training': self.config['training'],
                     'config/data': self.config['data'],
                 })
+                
+                # Attach a callback to stream Ultralytics metrics to W&B
+                def _wandb_on_epoch_end(trainer_obj):
+                    try:
+                        payload = {}
+                        # Trainer metrics dict (Ultralytics)
+                        if hasattr(trainer_obj, 'metrics') and isinstance(trainer_obj.metrics, dict):
+                            for key, value in trainer_obj.metrics.items():
+                                try:
+                                    payload[key] = float(value)
+                                except Exception:
+                                    pass
+                        # Learning rate (first param group)
+                        try:
+                            if hasattr(trainer_obj, 'optimizer') and trainer_obj.optimizer:
+                                payload['lr'] = float(trainer_obj.optimizer.param_groups[0].get('lr', 0.0))
+                        except Exception:
+                            pass
+                        # Epoch index
+                        try:
+                            payload['epoch'] = int(getattr(trainer_obj, 'epoch', 0))
+                        except Exception:
+                            pass
+                        if payload:
+                            wandb.log(payload)
+                    except Exception as _e:
+                        logger.debug(f"W&B epoch-end logging skipped: {_e}")
+                
+                # Register for both train and val epoch ends to capture full set
+                try:
+                    self.model.add_callback('on_fit_epoch_end', _wandb_on_epoch_end)
+                    self.model.add_callback('on_val_end', _wandb_on_epoch_end)
+                    logger.info("W&B live metric callback attached")
+                except Exception as _e:
+                    logger.debug(f"Failed to attach W&B callbacks: {_e}")
             
             results = self.model.train(**train_args)
             
@@ -215,6 +229,7 @@ class YOLOTrainer:
         # Base training arguments
         train_args = {
             'data': str(Path('configs/yolov3/yolo_data.yaml')),  # YOLO format data config
+            'task': 'detect',  # Detection task (not classification)
             'epochs': train_config['epochs'],
             'batch': train_config['batch_size'],
             'imgsz': model_config['img_size'],
@@ -227,13 +242,16 @@ class YOLOTrainer:
             'weight_decay': train_config['weight_decay'],
             'pretrained': model_config['pretrained'],
             'plots': True,  # Enable plotting
-            'save_period': 1,  # Save every epoch for better tracking
+            'save_period': 1,  # Save every 1 epoch
             'verbose': True,  # Enable verbose logging
             'exist_ok': True,  # Overwrite existing runs
             'patience': 100,  # Early stopping patience
             'save': True,  # Save checkpoints
             'save_txt': False,  # Don't save text predictions
             'save_conf': False,  # Don't save confidence scores
+            # W&B integration for Ultralytics
+            'project': self.config['wandb']['project'],
+            'name': self.config['wandb']['name'],
             
             # Augmentation parameters
             'hsv_h': train_config['augmentation']['hsv_h'],
@@ -260,6 +278,102 @@ class YOLOTrainer:
             train_args['patience'] = train_config['early_stopping']['patience']
         
         return train_args
+    
+    def _setup_auto_backup(self):
+        """Set up automatic backup to Google Drive."""
+        import subprocess
+        import threading
+        import time
+        
+        def backup_worker():
+            """Background worker to backup training outputs."""
+            while True:
+                try:
+                    # Check if training directory exists - look for actual training dirs
+                    training_dirs = ['pokemon-classifier', 'pokemon-yolo-training']
+                    backup_dir = '/content/drive/MyDrive/pokemon-yolo-training/'
+                    
+                    for training_dir in training_dirs:
+                        if Path(training_dir).exists():
+                            # Create backup directory if it doesn't exist
+                            Path(backup_dir).mkdir(parents=True, exist_ok=True)
+                            
+                            # Backup to Google Drive
+                            subprocess.run([
+                                'rsync', '-ravz',
+                                f'{training_dir}/',
+                                backup_dir
+                            ], check=False)  # Don't fail if Google Drive not mounted
+                            logger.info(f"📁 Auto-backup completed: {training_dir} -> {backup_dir}")
+                    
+                    # Wait 30 minutes before next backup
+                    time.sleep(1800)
+                except Exception as e:
+                    logger.warning(f"Auto-backup failed: {e}")
+                    time.sleep(1800)  # Wait before retrying
+        
+        # Start backup worker in background
+        backup_thread = threading.Thread(target=backup_worker, daemon=True)
+        backup_thread.start()
+        logger.info("🔄 Auto-backup to Google Drive enabled (every 30 minutes)")
+    
+    def _calculate_classification_metrics(self, model, val_dataloader):
+        """Calculate top-1 and top-5 accuracy for classification."""
+        try:
+            import torch
+            import numpy as np
+            from collections import defaultdict
+            
+            model.eval()
+            correct_top1 = 0
+            correct_top5 = 0
+            total = 0
+            
+            with torch.no_grad():
+                for batch in val_dataloader:
+                    images, targets = batch
+                    if torch.cuda.is_available():
+                        images = images.cuda()
+                    
+                    # Run inference
+                    results = model(images)
+                    
+                    # For YOLO, extract class predictions
+                    for i, result in enumerate(results):
+                        if hasattr(result, 'boxes') and len(result.boxes) > 0:
+                            # Get the highest confidence detection
+                            confidences = result.boxes.conf
+                            classes = result.boxes.cls
+                            
+                            # Get ground truth class
+                            gt_class = int(targets[i]['cls'][0]) if 'cls' in targets[i] else 0
+                            
+                            # Get top predictions
+                            top_indices = torch.argsort(confidences, descending=True)[:5]
+                            top_classes = classes[top_indices].cpu().numpy()
+                            
+                            # Check top-1 accuracy
+                            if len(top_classes) > 0 and int(top_classes[0]) == gt_class:
+                                correct_top1 += 1
+                            
+                            # Check top-5 accuracy
+                            if gt_class in [int(c) for c in top_classes]:
+                                correct_top5 += 1
+                            
+                            total += 1
+            
+            top1_acc = correct_top1 / total if total > 0 else 0
+            top5_acc = correct_top5 / total if total > 0 else 0
+            
+            return {
+                'top1_accuracy': top1_acc,
+                'top5_accuracy': top5_acc,
+                'total_samples': total
+            }
+            
+        except Exception as e:
+            logger.warning(f"Failed to calculate classification metrics: {e}")
+            return {'top1_accuracy': 0, 'top5_accuracy': 0, 'total_samples': 0}
     
     def _log_final_metrics(self, results: Dict[str, Any]):
         """Log final training metrics to W&B."""

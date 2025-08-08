@@ -702,12 +702,21 @@ def main():
         
         if args.resume:
             if not checkpoint_path:
-                # Try to find latest checkpoint
-                latest_checkpoint, latest_run_id = find_latest_checkpoint(storage_dirs['checkpoints'])
-                if latest_checkpoint:
-                    checkpoint_path = latest_checkpoint
-                    if not wandb_run_id and not args.force_new_run:
-                        wandb_run_id = latest_run_id
+                # Try to find latest checkpoint in multiple locations
+                checkpoint_locations = [
+                    storage_dirs['checkpoints'],  # Our custom directory
+                    'pokemon-classifier/yolov3-baseline-reproduction/weights',  # Ultralytics default
+                    'pokemon-yolo-training/yolov3-baseline-reproduction/weights'  # Alternative location
+                ]
+                
+                for location in checkpoint_locations:
+                    latest_checkpoint, latest_run_id = find_latest_checkpoint(location)
+                    if latest_checkpoint:
+                        checkpoint_path = latest_checkpoint
+                        if not wandb_run_id and not args.force_new_run:
+                            wandb_run_id = latest_run_id
+                        print(f"📦 Found checkpoint in: {location}")
+                        break
                         
             if not wandb_run_id and not args.force_new_run:
                 # Try to find run ID from file
