@@ -123,7 +123,8 @@ pokedex/
 │   │   ├── setup_colab_training.py # Colab environment setup
 │   │   ├── train_yolov3_baseline.py # Baseline training script
 │   │   ├── train_yolov3_improved.py # Improved training script
-│   │   └── resume_training.py  # Resume from checkpoint script
+│   │   ├── resume_training.py  # Resume from checkpoint script
+│   │   └── evaluate_model.py   # Evaluation script for trained models
 │   ├── vlm/                    # VLM-specific scripts
 │   ├── hybrid/                 # Hybrid-specific scripts
 │   └── common/                 # Common utility scripts
@@ -260,12 +261,11 @@ git_config = {
    - Output: 1025 class probabilities
 
 2. **Training**:
-   - Learning rate: 0.001
-   - Batch size: 16
-   - Epochs: 100
-   - Optimizer: Adam
-   - Loss: Cross-entropy
-   - Augmentation: Standard YOLO augmentations
+    - Learning rate: 0.0001
+    - Scheduler: cosine with 5 warmup epochs
+    - Batch size: 16
+    - Epochs: 100
+    - Augmentation: Standard YOLO augmentations
 
 3. **Evaluation**:
    - Top-1 accuracy
@@ -330,16 +330,17 @@ git_config = {
    - Configurations: Local configs with dynamic path updates
 
 3. **Model Loading Strategy**:
-   - **Primary**: Download YOLOv3 weights from Ultralytics URLs
-   - **Fallback 1**: Load from Ultralytics hub (`YOLO("yolov3")`)
-   - **Fallback 2**: Create from YAML config (`models/configs/yolov3.yaml`)
+    - **Primary**: Load official YOLOv3 weights via Ultralytics (downloads on first use)
+    - **Fallback**: Load from Ultralytics hub (`YOLO("yolov3")`)
+    - Local YAML fallback removed (previous `models/configs/yolov3.yaml` deleted)
    - **Cache management**: Auto-cleanup of corrupted weights
    - **Path resolution**: Dynamic working directory detection
 
 ### Experiment Tracking
 1. **W&B Integration**:
-   - Metrics logging with Ultralytics built-in integration
-   - Real-time training monitoring (loss, mAP, precision, recall)
+    - Metrics logging with Ultralytics built-in integration
+    - Real-time training monitoring (loss, mAP, precision, recall)
+    - Live metric callbacks from Ultralytics events to W&B (epoch-end and val-end)
    - Artifact storage for model checkpoints
    - Experiment comparison between runs
    - Hyperparameter tuning with sweeps
@@ -351,7 +352,8 @@ git_config = {
    - Resume capability with W&B run ID matching
    - Model export for deployment
    - Local storage in Colab (ephemeral per session)
-   - Automatic cleanup of old checkpoints
+    - Automatic cleanup of old checkpoints
+    - Auto-backup of training outputs to Google Drive every 30 minutes
 
 3. **Training Pipeline Integration**:
    - Dataset verification and preprocessing

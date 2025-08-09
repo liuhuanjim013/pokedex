@@ -54,17 +54,16 @@
 
 ### Model Loading Strategy
 1. **YOLOv3 Loading Priority**
-   - **Primary**: Download from Ultralytics asset URLs
-   - **Fallback 1**: Load from Ultralytics hub (`YOLO("yolov3")`)
-   - **Fallback 2**: Create from YAML config (`models/configs/yolov3.yaml`)
+   - **Primary**: Load official YOLOv3 weights (Ultralytics auto-download)
+   - **Fallback**: Load from Ultralytics hub (`YOLO("yolov3")`)
+   - YAML fallback removed (file `models/configs/yolov3.yaml` deleted)
    - **Cache Management**: Auto-cleanup corrupted weights
    - **Path Resolution**: Dynamic working directory detection
 
-2. **YAML Configuration**
-   - YOLOv3 architecture: `models/configs/yolov3.yaml`
+2. **Training Configuration**
    - Classes: 1025 (all Pokemon generations)
-   - Anchors: Standard YOLOv3 anchor boxes
    - Input size: 416x416 pixels
+   - Learning rate: 1e-4, cosine schedule with 5 warmup epochs
 
 ### Training Process
 1. **Initialization Order**
@@ -79,7 +78,12 @@
    - Track W&B run ID for resumption
    - Record actual progress vs saved epochs
    - Handle mid-epoch interruptions
-   - Local storage (ephemeral per Colab session)
+    - Local storage (ephemeral per Colab session)
+    - Auto-backup of training outputs to Google Drive every 30 minutes
+    - Resume scans multiple default paths for latest checkpoint:
+      - Custom checkpoints directory
+      - `pokemon-classifier/<run-name>/weights`
+      - `pokemon-yolo-training/<run-name>/weights`
 
 3. **Error Handling**
    - File I/O errors: Retry with exponential backoff for large operations
@@ -97,7 +101,7 @@
 
 2. **Metrics Logging**
    - **Built-in Ultralytics**: Automatic loss, mAP, precision, recall
-   - **Real-time Monitoring**: Live training progress
+   - **Real-time Monitoring**: Live training progress (callbacks on epoch/val end)
    - **System Metrics**: GPU usage, memory consumption
    - **Custom Logging**: Configuration parameters and experiment metadata
    - **Run Persistence**: Save run ID to disk for resumption

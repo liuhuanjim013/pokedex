@@ -58,7 +58,7 @@ Build a real-time Pokemon classifier that can identify 1025 Pokemon species from
 2. ✅ **Dataset loading from Hugging Face** - COMPLETED (128,768 files)
 3. ✅ **YOLOv3 training pipeline** - WORKING (1025 classes)
 4. 🔄 **Training in progress** - YOLOv3 baseline model training
-5. 🔄 **W&B integration** - System metrics logging, need training metrics
+5. 🔄 **W&B integration** - Live training metrics via Ultralytics callbacks
 6. ⏳ **Baseline performance documentation** - Pending training completion
 
 **Immediate Next Steps:**
@@ -110,11 +110,9 @@ Build a real-time Pokemon classifier that can identify 1025 Pokemon species from
 
 #### Model Loading & Training Resume (COMPLETED):
 - [x] **Model Loading Strategy**:
-  - [x] Implement robust model loading with fallbacks
-  - [x] Add local cache support with cleanup
-  - [x] Support multiple Ultralytics asset URLs
-  - [x] Add YAML fallback for model creation
-  - [x] Test model loading with invalid paths
+  - [x] Primary: Load official YOLOv3 weights (auto-download)
+  - [x] Fallback: Ultralytics hub (`YOLO("yolov3")`)
+  - [x] Removed YAML fallback (deleted `models/configs/yolov3.yaml`)
   - [x] Add comprehensive error handling
   - [x] Document model loading strategy
 - [x] **Training Resume**:
@@ -138,8 +136,7 @@ Build a real-time Pokemon classifier that can identify 1025 Pokemon species from
   - [x] Dataset verification (128,768 files: 90,126 train + 19,316 val + 19,326 test)
   - [x] Dynamic path configuration for Colab environment
 - [x] **YOLOv3 model setup** - COMPLETED
-  - [x] Model loading with fallback strategy (download → hub → YAML)
-  - [x] YOLOv3 YAML configuration created (`models/configs/yolov3.yaml`)
+  - [x] Model loading with fallback strategy (official → hub)
   - [x] 1025 class configuration for all Pokemon generations
   - [x] Training pipeline integration with Ultralytics
 - [x] **Training infrastructure** - COMPLETED
@@ -148,7 +145,7 @@ Build a real-time Pokemon classifier that can identify 1025 Pokemon species from
   - [x] Directory auto-creation for models/logs/checkpoints
   - [x] Progress tracking and error handling
 - [x] **Configuration files** - COMPLETED
-  - [x] `configs/yolov3/baseline_config.yaml` - baseline training parameters
+  - [x] `configs/yolov3/baseline_config.yaml` - baseline training parameters (LR 1e-4, cosine scheduler, 5 warmup epochs)
   - [x] `configs/yolov3/yolo_data.yaml` - dataset configuration (1025 classes)
   - [x] Dynamic path updates for Colab environment
 - [x] **Training scripts** - COMPLETED
@@ -158,8 +155,9 @@ Build a real-time Pokemon classifier that can identify 1025 Pokemon species from
   - [x] Error handling for Google Drive I/O issues
 - [x] **Source code modules** - COMPLETED
   - [x] `src/training/yolo/trainer.py` - core training class with model loading
-  - [x] Enhanced W&B integration (built-in Ultralytics logging)
+  - [x] Enhanced W&B integration (built-in Ultralytics logging + callbacks)
   - [x] Robust error handling and fallback mechanisms
+  - [x] Auto-backup worker to Google Drive (30 min interval)
 
 #### Current Priority (Next 1-2 days):
 - [x] **YOLOv3 baseline training** - IN PROGRESS (Epoch 1/100)
@@ -194,6 +192,7 @@ Build a real-time Pokemon classifier that can identify 1025 Pokemon species from
 - **Experiment Tracking**: W&B project with baseline and improvement experiments
 - **Checkpoint Management**: Automatic save/resume functionality working
 - **W&B Integration**: Real-time monitoring and visualization active
+ - **Evaluation**: `scripts/yolo/evaluate_model.py` provides mAP and top-k metrics
 
 ### 🚨 BLOCKERS & RISKS
 1. **Colab GPU Access**: May need Colab Pro for large-scale training
@@ -231,6 +230,7 @@ Build a real-time Pokemon classifier that can identify 1025 Pokemon species from
   - [ ] Update `src/training/yolo/yolov3_trainer.py` → merge into `src/training/yolo/trainer.py`
   - [ ] Create `src/training/yolo/checkpoint_manager.py`
   - [ ] Create `src/training/yolo/wandb_integration.py`
+  - [ ] Add `scripts/yolo/evaluate_model.py` and wire into docs
 
 #### Files to Remove (Wrong Design):
 - [ ] Remove any files that don't follow the new architecture
