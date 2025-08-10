@@ -1041,7 +1041,7 @@ def main():
             # This will handle W&B initialization internally
             yolo_trainer = YOLOTrainer(args.config, resume_id=wandb_run_id if not args.force_new_run else None)
             
-            # Initialize model (same as baseline/improved)
+            # Initialize model (YOLOTrainer handles checkpoint loading internally)
             yolo_trainer._setup_model()
             
             # Train with automatic resumption (same pattern as other scripts)

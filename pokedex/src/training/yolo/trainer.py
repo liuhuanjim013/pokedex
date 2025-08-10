@@ -253,9 +253,17 @@ class YOLOTrainer:
             device = 'cpu'
             logger.info("💻 No GPU detected - using CPU training")
         
+        # Auto-detect data config based on model type
+        if 'k210' in self.config['wandb']['name'].lower():
+            data_config_path = 'configs/yolov3/k210_data.yaml'
+            logger.info("📊 Using K210 data configuration")
+        else:
+            data_config_path = 'configs/yolov3/yolo_data.yaml'
+            logger.info("📊 Using standard data configuration")
+        
         # Base training arguments
         train_args = {
-            'data': str(Path('configs/yolov3/yolo_data.yaml')),  # YOLO format data config
+            'data': str(Path(data_config_path)),  # Auto-detected data config
             'task': 'detect',  # Detection task (not classification)
             'epochs': train_config['epochs'],
             'batch': train_config['batch_size'],
@@ -299,20 +307,33 @@ class YOLOTrainer:
         try:
             run_name = self.config['wandb']['name']
             project_dir = Path(self.config['wandb']['project'])
+            
+            # Multiple possible checkpoint locations
             candidate_run_dirs = [
                 project_dir / run_name,
                 Path('pokemon-yolo-training') / run_name,
+                # K210-specific paths (handle naming differences)
+                project_dir / 'yolov3n_k210_optimized',
+                project_dir / run_name.replace('-', '_'),  # Handle dash/underscore differences
+                project_dir / run_name.replace('yolov3-tinyu', 'yolov3n'),  # Handle model name differences
             ]
             resume_path = None
             latest_mtime = -1.0
+            logger.info(f"🔍 Searching for checkpoints in {len(candidate_run_dirs)} locations...")
             for run_dir in candidate_run_dirs:
                 weights_dir = run_dir / 'weights'
                 last_pt = weights_dir / 'last.pt'
+                logger.debug(f"Checking: {last_pt}")
                 if last_pt.exists():
                     mtime = last_pt.stat().st_mtime
                     if mtime > latest_mtime:
                         latest_mtime = mtime
                         resume_path = last_pt
+                        logger.info(f"✅ Found checkpoint: {last_pt}")
+                    else:
+                        logger.debug(f"Found older checkpoint: {last_pt}")
+                else:
+                    logger.debug(f"No checkpoint at: {last_pt}")
 
             if resume_path is not None:
                 # Reinitialize model from checkpoint to restore weights seamlessly
