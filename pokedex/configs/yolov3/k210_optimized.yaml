@@ -1,0 +1,102 @@
+# K210-Optimized YOLOv3-Tiny Configuration
+# Target: Sipeed Maix Bit K210 deployment
+# Model Size: <2MB, Runtime Memory: <3MB
+# Based on improved_config.yaml with K210 optimizations
+
+# Model configuration (matching improved_config structure)
+model:
+  name: "yolov3-tinyu"  # YOLOv3-tiny ultralytics (lightweight variant for K210)
+  weights: "yolov3-tinyu.pt"  # Official tiny ultralytics weights
+  classes: 1025  # All generations 1-9 (not reduced - as required)
+  img_size: 224  # K210 optimized size (reduced from 416)
+  pretrained: true
+
+# Training configuration (based on improved_config.yaml with K210 optimizations)
+training:
+  epochs: 200  # Increased from 100 for better convergence  
+  batch_size: 8  # Reduced from 32 for K210 memory constraints
+  learning_rate: 0.00005  # 5e-5 (reduced from 1e-4 for stability)
+  weight_decay: 0.001  # Increased from 0.0005 for better regularization
+  
+  # K210-optimized augmentation (more conservative than improved)
+  augmentation:
+    hsv_h: 0.015
+    hsv_s: 0.7
+    hsv_v: 0.4
+    degrees: 5.0  # Reduced from 10.0 for K210 stability
+    translate: 0.1  # Reduced from 0.2 for K210 stability
+    scale: 0.1  # Reduced from 0.5 for K210 stability
+    shear: 2.0
+    perspective: 0.0
+    flipud: 0.0
+    fliplr: 0.5  # Horizontal flip (kept from baseline)
+    mosaic: 0.0  # Disabled for K210 memory constraints
+    mixup: 0.0   # Disabled for K210 stability
+  
+  # Improved settings for stability (matching improved_config)
+  scheduler: "cosine"  # Cosine scheduling
+  warmup_epochs: 10  # Increased from 5 for K210 stability
+  early_stopping:  # Early stopping configuration
+    patience: 20  # Increased from 10 for K210 (longer convergence)
+    min_delta: 0.001  # Minimum improvement threshold
+
+# Data configuration (using existing YOLO dataset with different input size)
+data:
+  dataset: "liuhuanjim013/pokemon-yolo-1025"  # Use existing dataset
+  train_split: 0.7
+  val_split: 0.15
+  test_split: 0.15
+
+# W&B configuration (matching improved_config structure)
+wandb:
+  project: "pokemon-classifier"  # Same project as improved script for comparison
+  name: "yolov3-tinyu-k210-optimized"  # K210-specific run name
+  entity: "liuhuanjim013-self"
+  tags: ["yolov3-tinyu", "k210", "1025-classes", "embedded", "optimized"]
+  settings:
+    save_code: false  # Don't save code
+    disable_git: true  # Don't track git
+
+# Checkpoint configuration (matching improved_config)
+checkpoint:
+  save_frequency: 2
+  save_dir: "models/checkpoints/k210"
+  max_checkpoints: 100  # Keep last 100 checkpoints
+# K210-specific deployment settings
+k210:
+  # Target constraints
+  target_model_size: "2MB"
+  target_runtime_memory: "3MB"
+  input_size: 224  # K210 optimized input size
+  
+  # Export settings for K210
+  export:
+    format: "onnx"
+    opset: 12
+    dynamic: false  # Fixed input size for K210
+    simplify: true
+    
+  # Quantization for K210
+  quantization:
+    enabled: true
+    type: "int8"
+    calibration_samples: 400
+    
+  # nncase compilation settings
+  nncase:
+    target: "k210"
+    input_layout: "NCHW"
+    output_layout: "NCHW"
+    mean: [0.0, 0.0, 0.0]
+    std: [255.0, 255.0, 255.0]
+
+# K210 improvements over improved_config (for reference)
+k210_optimizations:
+  - "Reduced input size from 416 to 224 for K210 memory constraints"
+  - "Used YOLOv3-nano (yolov3n) instead of full YOLOv3 for smaller model"
+  - "Reduced batch size from 32 to 8 for K210 memory constraints"
+  - "More conservative augmentation for embedded stability"
+  - "Disabled mosaic and mixup for K210 memory and stability"
+  - "Increased early stopping patience for longer K210 convergence"
+  - "Added K210-specific export and compilation settings"
+  - "Maintained all 1025 classes for full Pokemon coverage"

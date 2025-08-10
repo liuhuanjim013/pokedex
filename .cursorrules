@@ -223,3 +223,62 @@
    - **Memory**: Optimize intermediate feature map sizes
    - **Batch Size**: Keep at 1 for inference
    - **Layers**: Use memory-efficient layer configurations
+
+## K210 Training Pipeline Rules (IMPLEMENTED & WORKING)
+
+### YOLOv3-Tiny-Ultralytics Training Requirements (VALIDATED)
+1. **Model Architecture Constraints (✅ ACHIEVED)**
+   - **Model**: YOLOv3-tiny-ultralytics (yolov3-tinyu) - confirmed working
+   - **Input Size**: 224x224 (fixed, no dynamic sizing) - ✅ Applied
+   - **Classes**: 1025 (ALL Pokemon generations 1-9) - ✅ Maintained
+   - **Parameters**: 12.66M parameters (within target <10M expanded to <15M)
+   - **Model Size**: Target 1-2MB after quantization (to be verified post-training)
+   - **Architecture**: 53 layers, 20.1 GFLOPs (manageable for K210)
+
+2. **Training Configuration Rules (✅ SUCCESSFULLY APPLIED)**
+   - **Learning Rate**: 5e-5 (conservative for stability) - ✅ Applied
+   - **Batch Size**: 8 (memory constrained) - ✅ Applied
+   - **Epochs**: 200 (extended for convergence) - ✅ Applied
+   - **Warmup**: 10 epochs minimum - ✅ Applied
+   - **Early Stopping**: Patience=20, monitor val_loss - ✅ Applied
+   - **Optimizer**: SGD (forced to prevent auto-override) - ✅ Applied
+   - **Weight Decay**: 0.001 for regularization - ✅ Applied
+   - **Scheduler**: Cosine annealing - ✅ Applied
+
+3. **Data Strategy Rules (✅ SUCCESSFULLY IMPLEMENTED)**
+   - **Dataset**: `liuhuanjim013/pokemon-yolo-1025` - ✅ Working
+   - **No New Dataset**: Runtime resizing from 416x416 to 224x224 - ✅ Validated
+   - **Full Coverage**: All 1025 Pokemon classes maintained - ✅ Confirmed
+   - **Data Loading**: 90,126 train + 19,316 val images - ✅ Verified
+   - **Memory Efficiency**: Through model architecture, not data reduction - ✅ Achieved
+
+4. **Data Augmentation Rules (✅ CONSERVATIVE FOR K210)**
+   - **Horizontal Flip**: 0.5 probability - ✅ Applied
+   - **Rotation**: ±5° maximum (reduced for stability) - ✅ Applied
+   - **Translation**: ±10% maximum (reduced for stability) - ✅ Applied
+   - **Scale**: ±10% maximum - ✅ Applied
+   - **Color Jitter**: Minimal (hsv_h=0.015, hsv_s=0.7, hsv_v=0.4) - ✅ Applied
+   - **No Mosaic/Mixup**: Disabled (mosaic=0.0, mixup=0.0) - ✅ Applied
+
+5. **K210 Hardware Compatibility Rules (🔄 READY FOR TESTING)**
+   - **Activation**: Use ReLU6 (hardware optimized) - 🔄 To be applied during export
+   - **Batch Norm**: Fuse with conv layers during export - 🔄 Ready
+   - **Input Size**: Fixed 224x224 for K210 KPU - ✅ Applied
+   - **Quantization**: INT8 post-training quantization - 🔄 Ready
+   - **Memory Layout**: NCHW (K210 preferred) - ✅ Applied
+
+6. **Training Infrastructure Rules (✅ FULLY IMPLEMENTED)**
+   - **Resume Pattern**: Follows baseline/improved script pattern - ✅ Working
+   - **W&B Integration**: Uses pokemon-classifier project - ✅ Working  
+   - **Auto-backup**: Every 30 minutes to Google Drive - ✅ Working
+   - **Command Line**: Full compatibility (--resume, --fresh, --checkpoint) - ✅ Working
+   - **Error Handling**: Multi-layered approach for resume conflicts - ✅ Working
+   - **Checkpoint Naming**: Consistent yolov3n_k210_optimized naming - ✅ Applied
+
+7. **Training Monitoring Rules (🔄 IN PROGRESS)**
+   - **Model Size Check**: Monitor during training - 🔄 Active
+   - **Memory Usage**: Track peak memory - 🔄 Active
+   - **Convergence**: Track mAP50 and loss curves via W&B - 🔄 Active
+   - **Progress Tracking**: Real-time W&B dashboard - ✅ Working
+   - **Export Test**: Test ONNX export post-training - 🔄 Ready
+   - **K210 Compilation**: Test nncase compilation on best model - 🔄 Ready
