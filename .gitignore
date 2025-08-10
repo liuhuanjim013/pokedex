@@ -52,14 +52,39 @@ pokedex/models/final/
 pokedex/models/compressed/
 !pokedex/models/configs/  # Keep model configs in git
 
-# No files in root except documentation
-/*
+# First, ignore everything
+*
+
+# Then, allow documentation files in root
 !/.gitignore
 !/ARCHITECTURE.md
 !/TASKS.md
 !/README.md
 !/LICENSE
 !/.cursorrules
+
+# Allow Python package files
+!/pyproject.toml
+!/requirements.txt
+!/requirements/
+
+# Allow source code directories
+!/pokedex/
+/pokedex/*
+!/pokedex/scripts/
+!/pokedex/scripts/**
+!/pokedex/src/
+!/pokedex/src/**
+!/pokedex/configs/
+!/pokedex/configs/**
+!/pokedex/tests/
+!/pokedex/tests/**
+!/pokedex/docs/
+!/pokedex/docs/**
+!/pokedex/notebooks/
+!/pokedex/notebooks/**
+!/pokedex/requirements/
+!/pokedex/requirements/**
 
 # Cache directories
 .cache/

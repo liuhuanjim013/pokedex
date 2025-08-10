@@ -407,8 +407,48 @@ git_config = {
 - **Export**: Convert trained `.pt` to ONNX with fixed input (e.g., 320x320), static shape, opset 12, simplified graph.
 - **Compile**: Use nncase (ncc, target k210) with INT8/UINT8 quantization and a calibration dataset to generate `.kmodel`.
 - **Artifacts**: Ship `model.kmodel`, `classes.txt`, and (if needed) `anchors.txt` to the device; configure thresholds/NMS in firmware.
-- **Runtime**: MaixPy/C uses KPU YOLO runner; since labels are full-image boxes, take top detection’s class as prediction.
+- **Runtime**: MaixPy/C uses KPU YOLO runner; since labels are full-image boxes, take top detection's class as prediction.
 - **Helper script**: `scripts/yolo/export_k210.py` automates ONNX export, nncase compilation, and packaging of artifacts.
+
+**Current Status & Learnings:**
+- **ONNX Export**: ✅ Working perfectly (398.6 MB model, simplified with onnxsim)
+- **nncase Compatibility**: ✅ Working with Python API approach
+  - nncase v1.6.0: Successfully compiles with Python API
+  - Removed CLI dependency entirely
+  - Multiple gencode approaches implemented for reliability
+- **Compilation Pipeline**: ✅ All optimization steps complete successfully
+  - Import graph, target optimization, quantization, module optimization
+  - Buffer fusion and code generation all working
+  - Memory usage summary available (445.49 MB total)
+- **Critical Issue**: ⚠️ Model Size Too Large for K210
+  - Memory Requirements:
+    - Input: 1.17 MB
+    - Output: 8.24 MB
+    - Data: 37.50 MB
+    - Model: 398.58 MB
+    - Total: 445.49 MB
+  - K210 Constraints:
+    - RAM: ~6MB
+    - Flash: ~16MB
+  - Need significant model optimization
+- **Environment Setup**: ✅ Automated nncase installation working
+  - Proper version management and dependency resolution
+  - Python API-based compilation
+  - Calibration dataset preparation (400 images)
+- **Export Pipeline Status**: ✅ Complete infrastructure ready
+  - ONNX export and simplification working
+  - Calibration dataset preparation automated
+  - All compilation steps functional
+  - Successful kmodel generation
+- **Next Steps**: Model Optimization Required
+  - Use YOLOv3-tiny or smaller variant
+  - Reduce input resolution (224x224)
+  - Consider grouping similar Pokemon
+  - Implement channel pruning
+  - Use more aggressive quantization
+  - Optimize memory usage patterns
+  - Target model size: 1-2MB
+  - Target runtime memory: 2-3MB
 
 ### Production Infrastructure
 1. **Model Serving**:

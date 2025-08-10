@@ -175,3 +175,51 @@
    - Validate class IDs (0-based)
    - Verify per-Pokemon splits
    - Test image-label pairs match
+
+## K210 Export Pipeline Rules
+
+### K210 Export & Deployment Rules
+
+1. **Model Size & Memory Constraints**
+   - **Hardware Limits**:
+     - RAM: ~6MB maximum
+     - Flash: ~16MB maximum
+   - **Target Metrics**:
+     - Model size: 1-2MB
+     - Runtime memory: 2-3MB
+     - Input size: 224x224 or smaller
+     - Architecture: Tiny/efficient variants
+
+2. **nncase Version & API Rules**
+   - **Version**: Use nncase v1.6.0 (confirmed working)
+   - **API Approach**: Use Python API directly, avoid CLI
+   - **Compilation Flow**: 
+     1. Import ONNX model
+     2. Configure compiler options
+     3. Compile model
+     4. Generate kmodel using multiple approaches
+   - **Error Handling**: Try multiple gencode approaches in order:
+     1. BytesIO buffer with gencode_tobytes
+     2. Direct bytes with gencode_tobytes
+     3. String path with gencode (fallback)
+
+3. **Environment Setup Requirements**
+   - **Installation**: Use `setup_environment.py` with `--k210-only` flag
+   - **Dependencies**: Install onnx, onnxruntime, onnxsim, nncase
+   - **Version Management**: Handle nncase version conflicts
+   - **Verification**: Test compilation with tiny model
+
+4. **Export Pipeline Requirements**
+   - **ONNX Export**: Use Ultralytics with fixed input shape
+   - **Calibration**: Prepare 400 images at target resolution
+   - **Memory Analysis**: Report detailed memory usage breakdown
+   - **Artifacts**: Package kmodel with classes.txt and anchors.txt
+
+5. **Model Optimization Rules**
+   - **Architecture**: Use YOLOv3-tiny or smaller variant
+   - **Resolution**: Target 224x224 input size
+   - **Classes**: Consider grouping similar Pokemon
+   - **Optimization**: Use channel pruning and aggressive quantization
+   - **Memory**: Optimize intermediate feature map sizes
+   - **Batch Size**: Keep at 1 for inference
+   - **Layers**: Use memory-efficient layer configurations
