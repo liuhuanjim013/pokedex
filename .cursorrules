@@ -65,6 +65,37 @@
    - Input size: 416x416 pixels
    - Learning rate: 1e-4, cosine schedule with 5 warmup epochs
 
+### Baseline Training Results & Learnings
+1. **Performance Metrics (48 epochs completed)**
+   - **Best mAP50**: 0.9746 (epoch 44)
+   - **Best mAP50-95**: 0.803 (epoch 44)
+   - **Training Loss**: Steady decrease until epoch 45
+   - **Validation Loss**: Increasing trend after epoch 30 (overfitting)
+
+2. **Critical Issues Identified**
+   - **Training Instability**: Dramatic performance drop at epoch 45
+     - mAP50 dropped from 0.9746 to 0.00041
+     - mAP50-95 dropped from 0.803 to 0.00033
+   - **Overfitting**: Validation loss increasing while training loss decreasing
+   - **Learning Rate**: 1e-4 may be too high for 1025 classes
+   - **Augmentation**: Minimal augmentation insufficient for generalization
+
+3. **Improvement Opportunities**
+   - **Early Stopping**: Implement to prevent overfitting (patience=10)
+   - **Learning Rate**: Reduce to 5e-5 or implement adaptive scheduling
+   - **Augmentation**: Add rotation, shear, mosaic, mixup
+   - **Regularization**: Add dropout, weight decay, label smoothing
+   - **Batch Size**: Consider increasing to 32 for better gradient estimates
+   - **Monitoring**: Add validation metrics monitoring for early detection
+
+4. **Baseline Configuration (Current)**
+   - Learning rate: 1e-4 (cosine schedule)
+   - Batch size: 16
+   - Warmup epochs: 5
+   - Augmentation: Horizontal flip only (0.5 probability)
+   - No early stopping
+   - No additional regularization
+
 ### Training Process
 1. **Initialization Order**
    - Verify environment setup and conda activation

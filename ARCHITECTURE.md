@@ -402,6 +402,14 @@ git_config = {
    - Deployment packaging
    - Update mechanism
 
+#### K210 (Maix Bit) Export & Deployment
+- **Training assumption**: YOLO detection with full-image bounding boxes (one box per image), compatible with K210 YOLO runtime.
+- **Export**: Convert trained `.pt` to ONNX with fixed input (e.g., 320x320), static shape, opset 12, simplified graph.
+- **Compile**: Use nncase (ncc, target k210) with INT8/UINT8 quantization and a calibration dataset to generate `.kmodel`.
+- **Artifacts**: Ship `model.kmodel`, `classes.txt`, and (if needed) `anchors.txt` to the device; configure thresholds/NMS in firmware.
+- **Runtime**: MaixPy/C uses KPU YOLO runner; since labels are full-image boxes, take top detection’s class as prediction.
+- **Helper script**: `scripts/yolo/export_k210.py` automates ONNX export, nncase compilation, and packaging of artifacts.
+
 ### Production Infrastructure
 1. **Model Serving**:
    - TensorFlow Serving
@@ -461,3 +469,155 @@ git_config = {
    - Synthetic generation
    - Domain adaptation
    - Cross-dataset validation
+
+## YOLO Training Rules
+
+### Data Configuration
+1. **YOLO Dataset Format Requirements**
+   - Directory: `processed/yolo_dataset/`
+   - Images: 416x416 JPEG in `images/{split}/`
+   - Labels: YOLO format in `labels/{split}/`
+   - Naming: `{pokemon_id}_{image_number:03d}.{ext}` (3-digit padding)
+   - Class IDs: 0-based (0-1024)
+   - Full-image boxes: "0.5 0.5 1.0 1.0"
+   - Multiprocessing: 8 workers, 100 images per batch
+   - Progress Tracking: Percentage complete per split
+   - Lookup Tables: O(1) access for raw-to-processed mapping
+
+2. **Dataset Verification**
+   - Check Hugging Face access first
+   - Verify YOLO config format
+   - Validate class count (1025)
+   - Check split names match
+   - Verify per-Pokemon 70/15/15 splits
+   - Validate label format and class IDs (0-based)
+   - Check image sizes (416x416)
+   - Verify image data types (bytes or PIL)
+   - Skip already processed splits
+   - Show progress with tqdm
+   - Handle errors with descriptive messages
+   - Update config paths dynamically
+
+### Model Loading Strategy
+1. **YOLOv3 Loading Priority**
+   - **Primary**: Load official YOLOv3 weights (Ultralytics auto-download)
+   - **Fallback**: Load from Ultralytics hub (`YOLO("yolov3")`)
+   - YAML fallback removed (file `models/configs/yolov3.yaml` deleted)
+   - **Cache Management**: Auto-cleanup corrupted weights
+   - **Path Resolution**: Dynamic working directory detection
+
+2. **Training Configuration**
+   - Classes: 1025 (all Pokemon generations)
+   - Input size: 416x416 pixels
+   - Learning rate: 1e-4, cosine schedule with 5 warmup epochs
+
+### Training Process
+1. **Initialization Order**
+   - Verify environment setup and conda activation
+   - Check dataset access from Hugging Face
+   - Initialize W&B tracking with run resumption
+   - Set up model with fallback loading strategy
+   - Create required directories automatically
+
+2. **Checkpoint Management**
+   - Save metadata with checkpoints (W&B run ID, epoch, metrics)
+   - Track W&B run ID for resumption
+   - Record actual progress vs saved epochs
+   - Handle mid-epoch interruptions
+    - Local storage (ephemeral per Colab session)
+    - Auto-backup of training outputs to Google Drive every 30 minutes
+    - Resume scans multiple default paths for latest checkpoint:
+      - Custom checkpoints directory
+      - `pokemon-classifier/<run-name>/weights`
+      - `pokemon-yolo-training/<run-name>/weights`
+
+3. **Error Handling**
+   - File I/O errors: Retry with exponential backoff for large operations
+   - Missing conda: Dynamic path detection and helpful messages
+   - Model loading failures: Multiple fallback strategies
+   - Dataset access: Hugging Face authentication and caching
+
+### Baseline Training Results & Learnings
+1. **Performance Metrics (48 epochs completed)**
+   - **Best mAP50**: 0.9746 (epoch 44)
+   - **Best mAP50-95**: 0.803 (epoch 44)
+   - **Training Loss**: Steady decrease until epoch 45
+   - **Validation Loss**: Increasing trend after epoch 30 (overfitting)
+
+2. **Critical Issues Identified**
+   - **Training Instability**: Dramatic performance drop at epoch 45
+     - mAP50 dropped from 0.9746 to 0.00041
+     - mAP50-95 dropped from 0.803 to 0.00033
+   - **Overfitting**: Validation loss increasing while training loss decreasing
+   - **Learning Rate**: 1e-4 may be too high for 1025 classes
+   - **Augmentation**: Minimal augmentation insufficient for generalization
+
+3. **Improvement Opportunities**
+   - **Early Stopping**: Implement to prevent overfitting (patience=10)
+   - **Learning Rate**: Reduce to 5e-5 or implement adaptive scheduling
+   - **Augmentation**: Add rotation, shear, mosaic, mixup
+   - **Regularization**: Add dropout, weight decay, label smoothing
+   - **Batch Size**: Consider increasing to 32 for better gradient estimates
+   - **Monitoring**: Add validation metrics monitoring for early detection
+
+4. **Baseline Configuration (Current)**
+   - Learning rate: 1e-4 (cosine schedule)
+   - Batch size: 16
+   - Warmup epochs: 5
+   - Augmentation: Horizontal flip only (0.5 probability)
+   - No early stopping
+   - No additional regularization
+
+### W&B Integration
+1. **Configuration**
+   - Use singleton pattern for initialization
+   - Enable offline fallback with environment variables
+   - Disable code/git tracking for Colab
+   - Use personal account (liuhuanjim013-self)
+   - Project: "pokemon-classifier"
+
+2. **Metrics Logging**
+   - **Built-in Ultralytics**: Automatic loss, mAP, precision, recall
+   - **Real-time Monitoring**: Live training progress (callbacks on epoch/val end)
+   - **System Metrics**: GPU usage, memory consumption
+   - **Custom Logging**: Configuration parameters and experiment metadata
+   - **Run Persistence**: Save run ID to disk for resumption
+
+3. **Resume Strategy**
+   - Try specified checkpoint with matching W&B run ID
+   - Match W&B run ID from saved checkpoint metadata
+   - Fall back to latest checkpoint if run ID missing
+   - Support forcing new run with --force-new-run flag
+   - Maintain metrics continuity during resume
+
+4. **Error Handling**
+   - Clean up W&B runs on training failure
+   - Proper exception handling with informative messages
+   - Resource cleanup and session management
+   - Offline mode fallback for network issues
+
+### Testing Requirements
+1. **Training Tests**
+   - Verify setup works
+   - Check arguments
+   - Test data loading
+   - Validate progress
+
+2. **W&B Tests**
+   - Test initialization
+   - Verify resumption
+   - Check offline mode
+   - Validate cleanup
+
+3. **Checkpoint Tests**
+   - Test metadata saving
+   - Verify loading
+   - Check progress tracking
+   - Test interruption recovery
+
+4. **Dataset Format Tests**
+   - Verify image sizes (416x416)
+   - Check label format
+   - Validate class IDs (0-based)
+   - Verify per-Pokemon splits
+   - Test image-label pairs match

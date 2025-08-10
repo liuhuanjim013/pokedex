@@ -132,7 +132,26 @@ class YOLOTrainer:
     
     def _setup_checkpoint_manager(self):
         """Initialize checkpoint manager."""
-        self.checkpoint_manager = CheckpointManager(self.config['checkpoint'])
+        # Use a Colab-friendly default if the configured path is not suitable
+        checkpoint_cfg = dict(self.config['checkpoint'])
+        try:
+            from copy import deepcopy
+            checkpoint_cfg = deepcopy(self.config['checkpoint'])
+        except Exception:
+            pass
+
+        configured_save_dir = Path(checkpoint_cfg.get('save_dir', ''))
+
+        # Detect Colab and prefer /content paths to avoid /home mismatches
+        in_colab_env = Path('/content').exists()
+        if in_colab_env:
+            colab_default = Path('/content/models/checkpoints')
+            # If configured path is empty, under /home, or clearly not writable, switch to Colab default
+            if (not configured_save_dir or str(configured_save_dir).startswith('/home') or
+                    (configured_save_dir.exists() and not os.access(configured_save_dir, os.W_OK))):
+                checkpoint_cfg['save_dir'] = str(colab_default)
+
+        self.checkpoint_manager = CheckpointManager(checkpoint_cfg)
     
     def _setup_wandb(self, resume_id: Optional[str] = None):
         """Initialize W&B integration."""
@@ -268,6 +287,41 @@ class YOLOTrainer:
             'mixup': train_config['augmentation']['mixup'],
         }
         
+        # Auto-detect resume from Ultralytics run directories
+        try:
+            run_name = self.config['wandb']['name']
+            project_dir = Path(self.config['wandb']['project'])
+            candidate_run_dirs = [
+                project_dir / run_name,
+                Path('pokemon-yolo-training') / run_name,
+            ]
+            resume_path = None
+            latest_mtime = -1.0
+            for run_dir in candidate_run_dirs:
+                weights_dir = run_dir / 'weights'
+                last_pt = weights_dir / 'last.pt'
+                if last_pt.exists():
+                    mtime = last_pt.stat().st_mtime
+                    if mtime > latest_mtime:
+                        latest_mtime = mtime
+                        resume_path = last_pt
+
+            if resume_path is not None:
+                # Reinitialize model from checkpoint to restore weights seamlessly
+                try:
+                    self.model = YOLO(str(resume_path))
+                    logger.info(f"Loaded model from checkpoint: {resume_path}")
+                except Exception as _load_e:
+                    logger.warning(f"Failed to load model from checkpoint, will rely on Ultralytics resume: {_load_e}")
+                train_args['resume'] = True
+                logger.info(f"Resuming Ultralytics training from checkpoint: {resume_path}")
+            else:
+                train_args['resume'] = False
+        except Exception as _e:
+            # If anything goes wrong, don't block training
+            train_args['resume'] = False
+            logger.debug(f"Resume auto-detection failed, starting fresh: {_e}")
+
         # Add scheduler if specified
         if train_config['scheduler'] == 'cosine':
             train_args['cos_lr'] = True

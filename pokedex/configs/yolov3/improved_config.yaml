@@ -1,40 +1,44 @@
-# Improved Configuration - Enhanced Training Parameters
-# Goal: Address original blog limitations with enhanced training
-# Based on: https://www.cnblogs.com/xianmasamasa/p/18995912
+# YOLOv3 Improved Training Configuration
+# Addresses critical issues from baseline training:
+# - Training instability at epoch 45
+# - Overfitting after epoch 30
+# - Insufficient augmentation
+# - High learning rate for 1025 classes
 
 model:
-  name: "yolov3"
-  classes: 1025  # All generations (same as original)
+  name: "yolov3"  # Official YOLOv3 model
+  weights: "yolov3.pt"  # Official weights
+  classes: 1025  # All generations 1-9
   img_size: 416
   pretrained: true
 
 training:
-  epochs: 200
-  batch_size: 32
-  learning_rate: 0.001
-  weight_decay: 0.0005
+  epochs: 200  # Increased from 100 for better convergence
+  batch_size: 32  # Increased from 16 for better gradient estimates
+  learning_rate: 0.00005  # 5e-5 (reduced from 1e-4 for stability)
+  weight_decay: 0.001  # Increased from 0.0005 for better regularization
   
-  # Enhanced augmentation to address original limitations
+  # Enhanced augmentation (addressing baseline limitations)
   augmentation:
     hsv_h: 0.015
     hsv_s: 0.7
     hsv_v: 0.4
-    degrees: 10.0  # Rotation (addresses size sensitivity)
-    translate: 0.2  # Translation (addresses position sensitivity)
-    scale: 0.9
-    shear: 2.0  # Shear (addresses angle sensitivity)
-    perspective: 0.001
-    flipud: 0.5
-    fliplr: 0.5
-    mosaic: 1.0  # Mosaic (addresses background interference)
-    mixup: 0.1  # Mixup (improves generalization)
+    degrees: 10.0  # NEW: Rotation (±10°) - was 0.0
+    translate: 0.2  # NEW: Translation (±20%) - was 0.0
+    scale: 0.5
+    shear: 2.0     # NEW: Shear (±2°) - was 0.0
+    perspective: 0.0
+    flipud: 0.0
+    fliplr: 0.5    # Horizontal flip (kept from baseline)
+    mosaic: 1.0    # NEW: Mosaic augmentation - was 0.0
+    mixup: 0.1     # NEW: Mixup augmentation - was 0.0
   
-  # Enhanced training to address original limitations
-  scheduler: "cosine"
-  warmup_epochs: 5
-  early_stopping:
-    patience: 10
-    min_delta: 0.001
+  # Improved settings for stability
+  scheduler: "cosine"  # Cosine scheduling
+  warmup_epochs: 5  # Warmup epochs
+  early_stopping:  # NEW: Early stopping configuration
+    patience: 10  # Stop if no improvement for 10 epochs
+    min_delta: 0.001  # Minimum improvement threshold
 
 data:
   dataset: "liuhuanjim013/pokemon-yolo-1025"
@@ -45,19 +49,24 @@ data:
 wandb:
   project: "pokemon-classifier"
   name: "yolov3-improved-training"
-  entity: "liuhuanjim013"
-  tags: ["yolov3", "improved", "enhanced", "1025-classes"]
+  entity: "liuhuanjim013-self"
+  tags: ["yolov3", "improved", "1025-classes", "early-stopping"]
+  settings:
+    save_code: false  # Don't save code
+    disable_git: true  # Don't track git
 
 checkpoint:
-  save_frequency: 10
-  save_dir: "/content/drive/checkpoints"
-  max_checkpoints: 5
+  save_frequency: 1
+  save_dir: "models/checkpoints/improved"
+  max_checkpoints: 100  # Keep last 100 checkpoints
 
-# Improvements to address original limitations
+# Improvements over baseline (for reference)
 improvements:
-  - "Enhanced augmentation (rotation, shear, mosaic, mixup)"
-  - "Cosine learning rate scheduling with warmup"
-  - "Early stopping to prevent overfitting"
-  - "Larger batch size for better gradient estimates"
-  - "Longer training (200 epochs vs 100)"
-  - "Better regularization techniques" 
+  - "Reduced learning rate from 1e-4 to 5e-5 for stability"
+  - "Increased batch size from 16 to 32 for better gradients"
+  - "Added rotation, translation, and shear augmentation"
+  - "Added mosaic and mixup augmentation"
+  - "Implemented early stopping with patience=10"
+  - "Increased weight decay for better regularization"
+  - "Extended training to 200 epochs for convergence"
+  - "Enhanced cosine learning rate scheduling"
