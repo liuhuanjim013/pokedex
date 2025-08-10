@@ -245,6 +245,14 @@ class YOLOTrainer:
         model_config = self.config['model']
         data_config = self.config['data']
         
+        # Detect available device
+        if torch.cuda.is_available():
+            device = '0'  # Use first GPU
+            logger.info("🚀 CUDA GPU detected - using GPU acceleration")
+        else:
+            device = 'cpu'
+            logger.info("💻 No GPU detected - using CPU training")
+        
         # Base training arguments
         train_args = {
             'data': str(Path('configs/yolov3/yolo_data.yaml')),  # YOLO format data config
@@ -252,7 +260,7 @@ class YOLOTrainer:
             'epochs': train_config['epochs'],
             'batch': train_config['batch_size'],
             'imgsz': model_config['img_size'],
-            'device': 'auto',  # Auto-detect GPU/CPU
+            'device': device,  # Use detected device
             'project': 'pokemon-yolo-training',
             'name': f"{self.config['wandb']['name']}",
             'save_period': self.config['checkpoint']['save_frequency'],

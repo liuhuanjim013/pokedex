@@ -24,6 +24,20 @@ from datasets import load_dataset
 from PIL import Image
 import numpy as np
 
+# Add src to path for module imports
+src_path = str(Path(__file__).resolve().parents[2] / 'src')
+if src_path not in sys.path:
+    sys.path.append(src_path)
+
+try:
+    from training.yolo.trainer import YOLOTrainer
+    from evaluation.yolo.evaluator import YOLOEvaluator
+except ImportError as e:
+    print(f"❌ Failed to import required modules: {e}")
+    print("Make sure you're running from the project root directory.")
+    YOLOTrainer = None
+    YOLOEvaluator = None
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -892,6 +906,9 @@ def main():
     parser.add_argument("--fresh", action="store_true", help="Force fresh training (ignore existing checkpoints)")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     
+    # Update help text to reflect auto-resume behavior
+    resume_group.description = "Resume Options (script auto-detects checkpoints by default)"
+    
     args = parser.parse_args()
     
     if args.verbose:
@@ -908,6 +925,26 @@ def main():
         # Handle resumption logic (same as baseline/improved scripts)
         checkpoint_path = args.checkpoint
         wandb_run_id = args.wandb_run_id
+        
+        # Auto-detect existing checkpoints if not forced fresh
+        if not args.fresh and not args.resume and not checkpoint_path:
+            # Check if checkpoints exist and auto-enable resume
+            checkpoint_locations = [
+                storage_dirs['checkpoints'],  # Our custom directory
+                'pokemon-classifier/yolov3n_k210_optimized/weights',  # Ultralytics default
+                'pokemon-yolo-training/yolov3n_k210_optimized/weights'  # Alternative location
+            ]
+            
+            for location in checkpoint_locations:
+                latest_checkpoint, latest_run_id = find_latest_checkpoint(location)
+                if latest_checkpoint:
+                    print(f"🔍 Found existing checkpoint: {os.path.basename(latest_checkpoint)}")
+                    print(f"🔄 Auto-enabling resume mode (use --fresh to start over)")
+                    args.resume = True
+                    checkpoint_path = latest_checkpoint
+                    if not wandb_run_id:
+                        wandb_run_id = latest_run_id
+                    break
         
         if args.resume:
             if not checkpoint_path:
@@ -936,16 +973,9 @@ def main():
             if wandb_run_id:
                 print(f"🔄 Resuming W&B run: {wandb_run_id}")
                 
-        # Initialize W&B and load config (same pattern as other scripts)
-        config = initialize_wandb(
-            Path(args.config), 
-            resume_id=None if args.force_new_run else wandb_run_id
-        )
-        
-
-        
-        # Create trainer
-        trainer = K210ModelTrainer(args.config)
+        # Load config (YOLOTrainer will handle W&B initialization)
+        with open(args.config, 'r') as f:
+            config = yaml.safe_load(f)
         
         # Show checkpoint and progress save locations
         checkpoint_dir = storage_dirs['checkpoints']
@@ -954,9 +984,14 @@ def main():
         
         print(f"\n💾 Training Progress & Checkpoint Locations:")
         print(f"📁 Base Directory: {storage_dirs['checkpoints']}")
-        print(f"📁 Training Output: YOLOTrainer will create subdirectories")
-        print(f"🏆 Models will be saved in: pokemon-yolo-training/ or pokemon-classifier/")
-        print(f"📊 Auto-backup enabled: Every 30 minutes to Google Drive")
+        if YOLOTrainer is not None:
+            print(f"📁 Training Output: YOLOTrainer will create subdirectories")
+            print(f"🏆 Models will be saved in: pokemon-yolo-training/ or pokemon-classifier/")
+            print(f"📊 Auto-backup enabled: Every 30 minutes to Google Drive (via YOLOTrainer)")
+        else:
+            print(f"📁 Training Output: K210ModelTrainer (no auto-backup)")
+            print(f"🏆 Models will be saved in: {storage_dirs['checkpoints']}")
+            print(f"📊 Auto-backup: Manual rsync required")
         print(f"📋 W&B Run ID File: wandb_run_id.txt")
         print(f"🎯 K210 Export: Available after training completion")
         
@@ -999,11 +1034,12 @@ def main():
         print("\n🚀 Starting K210 Training...")
         
         # Train using the proven YOLOTrainer approach
-        try:
-            from training.yolo.trainer import YOLOTrainer
+        if YOLOTrainer is not None:
+            print("✅ Using YOLOTrainer with auto-backup...")
             
             # Initialize YOLOTrainer with resume ID (same as improved script)
-            yolo_trainer = YOLOTrainer(args.config, resume_id=wandb_run_id)
+            # This will handle W&B initialization internally
+            yolo_trainer = YOLOTrainer(args.config, resume_id=wandb_run_id if not args.force_new_run else None)
             
             # Initialize model (same as baseline/improved)
             yolo_trainer._setup_model()
@@ -1013,13 +1049,19 @@ def main():
             
             # Get best model path
             best_model = results.get('best_model_path', 'unknown')
+            trainer = yolo_trainer
             trainer.best_model_path = best_model
             
-        except ImportError as e:
-            print(f"⚠️ Could not import YOLOTrainer: {e}")
-            print("🔄 Using K210-specific training...")
+        else:
+            print("⚠️ YOLOTrainer not available. Using K210-specific training...")
             
-            # Fallback: use train_k210 function (like train_baseline in baseline script)
+            # Fallback: Initialize W&B manually and use K210-specific training
+            config = initialize_wandb(
+                Path(args.config), 
+                resume_id=None if args.force_new_run else wandb_run_id
+            )
+            
+            # Use train_k210 function (like train_baseline in baseline script)
             results, trainer = train_k210(args.config, storage_dirs, checkpoint_path, wandb_run_id)
             best_model = trainer.best_model_path
         
@@ -1049,7 +1091,10 @@ def main():
         print(f"📁 Local Storage: {storage_dirs['checkpoints']}")
         print(f"📁 Training Output: {best_model}")
         print(f"🏆 Best Model: {best_model}")
-        print(f"📦 Auto-Backup: /content/drive/MyDrive/ (via YOLOTrainer)")
+        if YOLOTrainer is not None:
+            print(f"📦 Auto-Backup: /content/drive/MyDrive/ (via YOLOTrainer)")
+        else:
+            print(f"📦 Auto-Backup: Manual - use rsync commands shown in training")
         print(f"📋 W&B Dashboard: https://wandb.ai/liuhuanjim013-self/pokemon-classifier")
         if wandb.run:
             print(f"🔗 Current Run: https://wandb.ai/liuhuanjim013-self/pokemon-classifier/runs/{wandb.run.id}")
