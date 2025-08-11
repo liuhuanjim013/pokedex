@@ -1031,7 +1031,7 @@ names:
 - terapagos
 - pecharunt
 nc: 1025
-path: /home/liuhuan/pokedex/pokedex/data/yolo_dataset
+path: data/yolo_dataset
 test: test
 train: train
 val: validation

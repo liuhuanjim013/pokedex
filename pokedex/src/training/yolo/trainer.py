@@ -254,9 +254,13 @@ class YOLOTrainer:
             logger.info("💻 No GPU detected - using CPU training")
         
         # Auto-detect data config based on model type
-        if 'k210' in self.config['wandb']['name'].lower():
+        run_name = self.config['wandb']['name'].lower()
+        if 'yolov5n' in run_name and 'k210' in run_name:
+            data_config_path = 'configs/yolov3/yolov5n_k210_data.yaml'
+            logger.info("📊 Using YOLOv5n K210 data configuration")
+        elif 'k210' in run_name:
             data_config_path = 'configs/yolov3/k210_data.yaml'
-            logger.info("📊 Using K210 data configuration")
+            logger.info("📊 Using YOLOv3-tiny K210 data configuration")
         else:
             data_config_path = 'configs/yolov3/yolo_data.yaml'
             logger.info("📊 Using standard data configuration")
