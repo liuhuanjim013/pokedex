@@ -226,24 +226,22 @@
 
 ## K210 Training Pipeline Rules (IMPLEMENTED & WORKING)
 
-### YOLOv3-Tiny-Ultralytics Training Requirements (VALIDATED)
-1. **Model Architecture Constraints (✅ ACHIEVED)**
-   - **Model**: YOLOv3-tiny-ultralytics (yolov3-tinyu) - confirmed working
+### YOLOv3-Tiny-Ultralytics Training Results & Learnings (COMPLETED)
+1. **Training Success (✅ ACHIEVED - 91.7% mAP50)**
+   - **Model**: YOLOv3-tiny-ultralytics (yolov3-tinyu) - ✅ Successfully trained
    - **Input Size**: 224x224 (fixed, no dynamic sizing) - ✅ Applied
    - **Classes**: 1025 (ALL Pokemon generations 1-9) - ✅ Maintained
-   - **Parameters**: 12.66M parameters (within target <10M expanded to <15M)
-   - **Model Size**: Target 1-2MB after quantization (to be verified post-training)
-   - **Architecture**: 53 layers, 20.1 GFLOPs (manageable for K210)
+   - **Parameters**: 12.66M parameters (manageable for training, too large for K210)
+   - **Final Performance**: 91.7% mAP50, 93.1% Precision, 84.0% Recall
+   - **Critical Issue**: 49MB model exceeds K210 constraints (16MB Flash, 6MB RAM)
 
-2. **Training Configuration Rules (✅ SUCCESSFULLY APPLIED)**
-   - **Learning Rate**: 5e-5 (conservative for stability) - ✅ Applied
-   - **Batch Size**: 8 (memory constrained) - ✅ Applied
-   - **Epochs**: 200 (extended for convergence) - ✅ Applied
-   - **Warmup**: 10 epochs minimum - ✅ Applied
-   - **Early Stopping**: Patience=20, monitor val_loss - ✅ Applied
-   - **Optimizer**: SGD (forced to prevent auto-override) - ✅ Applied
-   - **Weight Decay**: 0.001 for regularization - ✅ Applied
-   - **Scheduler**: Cosine annealing - ✅ Applied
+2. **Critical Training Insights (✅ MAJOR BREAKTHROUGH)**
+   - **Initial Failure**: Conservative params (5e-5 LR, no augmentation) → 3.4% mAP50
+   - **Parameter Optimization**: 20x LR increase + aggressive augmentation → 91.7% mAP50
+   - **Key Learning**: 1025 classes require aggressive training approach
+   - **Final Config**: LR=1e-3, SGD, mosaic=0.5, mixup=0.3, patience=10
+   - **Success Factors**: Learning rate was primary bottleneck, augmentation prevented overfitting
+   - **Training Stability**: 62 epochs without overfitting using aggressive parameters
 
 3. **Data Strategy Rules (✅ SUCCESSFULLY IMPLEMENTED)**
    - **Dataset**: `liuhuanjim013/pokemon-yolo-1025` - ✅ Working
@@ -275,10 +273,11 @@
    - **Error Handling**: Multi-layered approach for resume conflicts - ✅ Working
    - **Checkpoint Naming**: Consistent yolov3n_k210_optimized naming - ✅ Applied
 
-7. **Training Monitoring Rules (🔄 IN PROGRESS)**
-   - **Model Size Check**: Monitor during training - 🔄 Active
-   - **Memory Usage**: Track peak memory - 🔄 Active
-   - **Convergence**: Track mAP50 and loss curves via W&B - 🔄 Active
-   - **Progress Tracking**: Real-time W&B dashboard - ✅ Working
-   - **Export Test**: Test ONNX export post-training - 🔄 Ready
-   - **K210 Compilation**: Test nncase compilation on best model - 🔄 Ready
+7. **K210 Deployment Challenge (🚨 CRITICAL CONSTRAINT)**
+   - **Export Success**: ✅ ONNX (48.4MB) and kmodel (49MB) generation working
+   - **Size Problem**: 🚨 Model 3x too large for Flash (49MB vs 16MB limit)
+   - **Memory Problem**: 🚨 Runtime 10x over RAM limit (59MB vs 6MB limit)
+   - **Next Solution**: YOLOv5n with 6.7x fewer parameters (1.9M vs 12.66M)
+   - **Class Strategy**: Consider reduction to 151 Pokemon or hierarchical approach
+   - **Infrastructure**: ✅ Complete pipeline ready for smaller models
+
