@@ -1052,17 +1052,17 @@ yolov5n_k210_training:
     hsv_h: 0.015
     hsv_s: 0.7
     hsv_v: 0.4
-    mixup: 0.3
-    mosaic: 0.5
+    mixup: 0.1
+    mosaic: 0.3
     perspective: 0.0
     scale: 0.3
     shear: 2.0
     translate: 0.2
   batch_size: 8
   early_stopping:
-    patience: 10
+    patience: 15
   input_size: 224
-  learning_rate: 1e-3
+  learning_rate: 3e-3
   momentum: 0.937
   optimizer: SGD
   workers: 4

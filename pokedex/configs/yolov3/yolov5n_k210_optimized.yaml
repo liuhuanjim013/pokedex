@@ -15,10 +15,10 @@ model:
 training:
   epochs: 200  # Increased from 100 for better convergence  
   batch_size: 8  # Reduced from 32 for K210 memory constraints
-  learning_rate: 0.001  # 1e-3 (aggressive for YOLOv5n, learned from YOLOv3-tiny success)
+  learning_rate: 0.003  # 3e-3 (more aggressive - YOLOv5n showing worse performance than YOLOv3-tiny)
   optimizer: "SGD"  # Force SGD to prevent auto-override of learning rate
   momentum: 0.937  # SGD momentum (YOLOv5n default)
-  weight_decay: 0.001  # Increased from 0.0005 for better regularization
+  weight_decay: 0.0005  # Reduced for faster initial learning
   
   # YOLOv5n-optimized augmentation (aggressive settings proven successful)
   augmentation:
@@ -32,14 +32,14 @@ training:
     perspective: 0.0
     flipud: 0.0
     fliplr: 0.5  # Horizontal flip (kept from baseline)
-    mosaic: 0.5  # Enabled for better generalization (YOLOv5n handles better)
-    mixup: 0.3   # Enabled for regularization (YOLOv5n handles better)
+    mosaic: 0.3  # Reduced for faster initial convergence (can increase later)
+    mixup: 0.1   # Reduced for faster initial convergence (can increase later)
   
   # Improved settings for stability (matching successful k210_optimized)
   scheduler: "cosine"  # Cosine scheduling
-  warmup_epochs: 15  # Increased from 10 for aggressive LR warmup
+  warmup_epochs: 25  # Extended for more aggressive LR (YOLOv5n needs more warmup)
   early_stopping:  # Early stopping configuration
-    patience: 10  # Reduced from 20 to catch overfitting earlier (learned from success)
+    patience: 15  # Increased to allow more time for YOLOv5n convergence
     min_delta: 0.001  # Minimum improvement threshold
     monitor: "val_loss"  # Monitor validation loss for overfitting
 
