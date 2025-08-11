@@ -1,0 +1,108 @@
+# K210-Optimized YOLOv5n Configuration
+# Target: Sipeed Maix Bit K210 deployment
+# Model Size: <2MB (after quantization), Runtime Memory: <6MB
+# Based on k210_optimized.yaml with YOLOv5n-specific optimizations
+
+# Model configuration (YOLOv5n instead of YOLOv3-tiny)
+model:
+  name: "yolov5n"  # YOLOv5n nano (modern 2020 architecture for K210)
+  weights: "yolov5n.pt"  # Official YOLOv5n weights (1.9M parameters)
+  classes: 1025  # All generations 1-9 (not reduced - as required)
+  img_size: 224  # K210 optimized size (reduced from 416)
+  pretrained: true
+
+# Training configuration (based on k210_optimized.yaml with YOLOv5n improvements)
+training:
+  epochs: 200  # Increased from 100 for better convergence  
+  batch_size: 8  # Reduced from 32 for K210 memory constraints
+  learning_rate: 0.001  # 1e-3 (aggressive for YOLOv5n, learned from YOLOv3-tiny success)
+  optimizer: "SGD"  # Force SGD to prevent auto-override of learning rate
+  momentum: 0.937  # SGD momentum (YOLOv5n default)
+  weight_decay: 0.001  # Increased from 0.0005 for better regularization
+  
+  # YOLOv5n-optimized augmentation (aggressive settings proven successful)
+  augmentation:
+    hsv_h: 0.015
+    hsv_s: 0.7
+    hsv_v: 0.4
+    degrees: 10.0  # Increased from 5.0 for better augmentation
+    translate: 0.2  # Increased from 0.1 for better augmentation
+    scale: 0.3  # Increased from 0.1 for better augmentation
+    shear: 2.0
+    perspective: 0.0
+    flipud: 0.0
+    fliplr: 0.5  # Horizontal flip (kept from baseline)
+    mosaic: 0.5  # Enabled for better generalization (YOLOv5n handles better)
+    mixup: 0.3   # Enabled for regularization (YOLOv5n handles better)
+  
+  # Improved settings for stability (matching successful k210_optimized)
+  scheduler: "cosine"  # Cosine scheduling
+  warmup_epochs: 15  # Increased from 10 for aggressive LR warmup
+  early_stopping:  # Early stopping configuration
+    patience: 10  # Reduced from 20 to catch overfitting earlier (learned from success)
+    min_delta: 0.001  # Minimum improvement threshold
+    monitor: "val_loss"  # Monitor validation loss for overfitting
+
+# Data configuration (using existing YOLO dataset with different input size)
+data:
+  dataset: "liuhuanjim013/pokemon-yolo-1025"  # Use existing dataset
+  train_split: 0.7
+  val_split: 0.15
+  test_split: 0.15
+
+# W&B configuration (matching successful pattern)
+wandb:
+  project: "pokemon-classifier"  # Same project as other scripts for comparison
+  name: "yolov5n-k210-optimized"  # YOLOv5n-specific run name
+  entity: "liuhuanjim013-self"
+  tags: ["yolov5n", "k210", "1025-classes", "embedded", "optimized", "modern-arch"]
+  settings:
+    save_code: false  # Don't save code
+    disable_git: true  # Don't track git
+
+# Checkpoint configuration (matching successful pattern)
+checkpoint:
+  save_frequency: 2
+  save_dir: "models/checkpoints/yolov5n_k210"
+  max_checkpoints: 100  # Keep last 100 checkpoints
+
+# K210-specific deployment settings (enhanced for YOLOv5n)
+k210:
+  # Target constraints (more achievable with YOLOv5n)
+  target_model_size: "2MB"  # After quantization
+  target_runtime_memory: "6MB"  # YOLOv5n more memory efficient
+  input_size: 224  # K210 optimized input size
+  
+  # Export settings for K210
+  export:
+    format: "onnx"
+    opset: 12
+    dynamic: false  # Fixed input size for K210
+    simplify: true
+    
+  # Quantization for K210 (YOLOv5n has superior support)
+  quantization:
+    enabled: true
+    type: "int8"
+    calibration_samples: 400
+    expected_reduction: "4x"  # YOLOv5n quantizes better
+    
+  # nncase compilation settings
+  nncase:
+    target: "k210"
+    input_layout: "NCHW"
+    output_layout: "NCHW"
+    mean: [0.0, 0.0, 0.0]
+    std: [255.0, 255.0, 255.0]
+
+# YOLOv5n advantages over YOLOv3-tiny for K210 (for reference)
+yolov5n_k210_advantages:
+  - "6.7x fewer parameters: 1.9M vs 12.66M (YOLOv3-tiny)"
+  - "Modern 2020 architecture vs 2018 design"
+  - "Superior INT8 quantization support"
+  - "Better training stability with aggressive parameters"
+  - "More efficient memory usage during inference"
+  - "Expected model size: 8-12MB → 2-3MB (quantized)"
+  - "Maintained all 1025 classes for full Pokemon coverage"
+  - "Knowledge distillation ready from 91.7% YOLOv3-tiny teacher"
+  - "Higher probability of successful K210 deployment"

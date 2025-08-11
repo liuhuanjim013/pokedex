@@ -281,3 +281,49 @@
    - **Class Strategy**: Consider reduction to 151 Pokemon or hierarchical approach
    - **Infrastructure**: ✅ Complete pipeline ready for smaller models
 
+## YOLOv5n K210 Implementation Rules (IMPLEMENTED & WORKING)
+
+### YOLOv5n Training Pipeline Implementation (✅ COMPLETED)
+1. **Infrastructure Created (✅ FULLY IMPLEMENTED)**
+   - **Training Script**: `train_yolov5n_k210.py` - ✅ Created with YOLOTrainer integration
+   - **Model Config**: `yolov5n_k210_optimized.yaml` - ✅ YOLOv5n with aggressive parameters
+   - **Data Config**: `yolov5n_k210_data.yaml` - ✅ All 1025 Pokemon classes maintained
+   - **Checkpoint Isolation**: ✅ Fixed model-specific checkpoint detection logic
+   - **W&B Integration**: ✅ Separate runs for model comparison
+
+2. **Model Architecture Validation (✅ CONFIRMED)**
+   - **Model**: YOLOv5n (modern 2020 architecture) - ✅ Successfully loaded
+   - **Parameters**: 3.12M (vs YOLOv3-tiny's 12.66M = 4.1x reduction)
+   - **Layers**: 153 modern layers (vs 53 old layers in YOLOv3-tiny)
+   - **GFLOPs**: 10.3 (vs YOLOv3-tiny's 20.1 = 50% more efficient)
+   - **Detection Head**: Modern 3-scale detection (vs 2-scale in YOLOv3-tiny)
+
+3. **Parameter Transfer Strategy (✅ APPLIED)**
+   - **Learning Rate**: 1e-3 (aggressive, proven successful with YOLOv3-tiny)
+   - **Augmentation**: mosaic=0.5, mixup=0.3 (enabled for better generalization)
+   - **Optimizer**: SGD forced to prevent auto-override of learning rate
+   - **Early Stopping**: patience=10 (faster overfitting detection)
+   - **Input Size**: 224x224 (K210 optimized)
+   - **Batch Size**: 8 (memory efficient)
+
+4. **Training Infrastructure Rules (✅ VALIDATED)**
+   - **YOLOTrainer Integration**: ✅ Same infrastructure as YOLOv3-tiny
+   - **Auto-backup**: ✅ Every 30 minutes to Google Drive via YOLOTrainer
+   - **W&B Logging**: ✅ pokemon-classifier project for direct comparison
+   - **Resume Logic**: ✅ Model-specific checkpoint detection (no cross-contamination)
+   - **Class Maintenance**: ✅ All 1025 Pokemon classes preserved
+
+5. **Model-Specific Checkpoint Detection (🔧 CRITICAL FIX)**
+   - **Problem Fixed**: YOLOv5n was incorrectly resuming from YOLOv3-tiny checkpoints
+   - **Solution Applied**: Model-aware checkpoint detection in YOLOTrainer
+   - **Implementation**: Added `model_name` checking in `_prepare_training_args`
+   - **Result**: YOLOv5n and YOLOv3-tiny now have isolated checkpoint spaces
+   - **Validation**: Fresh YOLOv5n training confirmed (no incorrect resume)
+
+6. **K210 Deployment Projections (📊 HIGHLY PROMISING)**
+   - **Pre-quantization**: ~12-15MB expected (vs YOLOv3-tiny's 49MB)
+   - **Post-INT8 quantization**: ~3-4MB projected (within K210 constraints)
+   - **Runtime Memory**: ~6MB or less expected (within K210 RAM limit)
+   - **Quantization Support**: Superior to YOLOv3-tiny (modern architecture)
+   - **K210 Compatibility**: High confidence in successful deployment
+

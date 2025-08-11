@@ -307,16 +307,27 @@ class YOLOTrainer:
         try:
             run_name = self.config['wandb']['name']
             project_dir = Path(self.config['wandb']['project'])
+            model_name = self.config['model']['name']
             
-            # Multiple possible checkpoint locations
+            # Multiple possible checkpoint locations (model-specific)
             candidate_run_dirs = [
                 project_dir / run_name,
                 Path('pokemon-yolo-training') / run_name,
-                # K210-specific paths (handle naming differences)
-                project_dir / 'yolov3n_k210_optimized',
+                # Model-specific paths (handle naming differences)
                 project_dir / run_name.replace('-', '_'),  # Handle dash/underscore differences
-                project_dir / run_name.replace('yolov3-tinyu', 'yolov3n'),  # Handle model name differences
             ]
+            
+            # Add model-specific legacy paths only for exact model matches
+            if 'yolov3' in model_name.lower():
+                candidate_run_dirs.extend([
+                    project_dir / 'yolov3n_k210_optimized',
+                    project_dir / run_name.replace('yolov3-tinyu', 'yolov3n'),
+                ])
+            elif 'yolov5' in model_name.lower():
+                candidate_run_dirs.extend([
+                    project_dir / 'yolov5n_k210_optimized',
+                    project_dir / run_name.replace('yolov5n', 'yolov5n_k210'),
+                ])
             resume_path = None
             latest_mtime = -1.0
             logger.info(f"🔍 Searching for checkpoints in {len(candidate_run_dirs)} locations...")

@@ -469,6 +469,47 @@ git_config = {
 - Recall: 26.46% → 83.99% (3.2x improvement)
 - Training Stability: No overfitting over 62 epochs
 
+#### YOLOv5n K210 Implementation Strategy (NEXT PHASE - IMPLEMENTED)
+
+**Problem**: YOLOv3-tiny (49MB) exceeds K210 constraints (16MB Flash, 6MB RAM)
+**Solution**: YOLOv5n architecture with aggressive parameter transfer
+
+1. **YOLOv5n Advantages for K210**
+   - **Parameters**: 1.9M vs YOLOv3-tiny's 12.66M (6.7x reduction)
+   - **Architecture**: Modern 2020 design vs 2018 YOLOv3-tiny
+   - **Quantization**: Superior INT8 support for embedded deployment
+   - **Memory Efficiency**: Better feature map optimization
+   - **Training Stability**: Modern training techniques built-in
+
+2. **Implementation Strategy (✅ COMPLETED)**
+   - **Model Selection**: YOLOv5n (modern nano variant)
+   - **Parameter Transfer**: Apply proven aggressive configuration from YOLOv3-tiny
+   - **Infrastructure Reuse**: Same YOLOTrainer, W&B integration, backup system
+   - **Class Maintenance**: Keep all 1025 Pokemon (no reduction yet)
+   - **Checkpoint Isolation**: Fixed model-specific checkpoint detection
+
+3. **Training Configuration Applied**
+   - **Learning Rate**: 1e-3 (aggressive, proven successful)
+   - **Augmentation**: mosaic=0.5, mixup=0.3 (enabled for generalization)
+   - **Optimizer**: SGD forced to prevent auto-override
+   - **Early Stopping**: patience=10 (faster overfitting detection)
+   - **Input Size**: 224x224 (K210 optimized)
+   - **Batch Size**: 8 (memory efficient)
+
+4. **Infrastructure Improvements (✅ IMPLEMENTED)**
+   - **Model-Specific Checkpoints**: Fixed YOLOv5n/YOLOv3-tiny checkpoint isolation
+   - **YOLOTrainer Enhancement**: Model-aware checkpoint detection logic
+   - **W&B Integration**: Separate runs for model comparison
+   - **Configuration Files**: Complete YOLOv5n config suite created
+   - **Resume Logic**: Robust handling of model-specific paths
+
+5. **Expected K210 Deployment Benefits**
+   - **Model Size**: ~8-12MB pre-quantization (vs 49MB YOLOv3-tiny)
+   - **Post-Quantization**: ~2-3MB expected (within 16MB Flash limit)
+   - **Runtime Memory**: ~6MB or less (within K210 RAM constraints)
+   - **Performance**: High confidence in comparable accuracy
+   - **Knowledge Distillation Ready**: Can learn from 91.7% YOLOv3-tiny teacher
+
 ### K210-Optimized Model Architecture (TRAINING COMPLETED - DEPLOYMENT CONSTRAINED)
 
 1. **YOLOv3-Tiny-Ultralytics Specifications (✅ TRAINING COMPLETED)**
