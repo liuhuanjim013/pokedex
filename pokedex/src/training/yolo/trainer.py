@@ -360,6 +360,12 @@ class YOLOTrainer:
         if train_config['early_stopping'] != 'none':
             train_args['patience'] = train_config['early_stopping']['patience']
         
+        # Add optimizer settings if specified
+        if 'optimizer' in train_config:
+            train_args['optimizer'] = train_config['optimizer']
+        if 'momentum' in train_config:
+            train_args['momentum'] = train_config['momentum']
+        
         return train_args
     
     def _setup_auto_backup(self):

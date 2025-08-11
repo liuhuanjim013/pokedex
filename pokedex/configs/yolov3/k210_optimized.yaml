@@ -15,30 +15,33 @@ model:
 training:
   epochs: 200  # Increased from 100 for better convergence  
   batch_size: 8  # Reduced from 32 for K210 memory constraints
-  learning_rate: 0.00005  # 5e-5 (reduced from 1e-4 for stability)
+  learning_rate: 0.001  # 1e-3 (increased 20x from 5e-5 to fix convergence)
+  optimizer: "SGD"  # Force SGD to prevent auto-override of learning rate
+  momentum: 0.937  # SGD momentum
   weight_decay: 0.001  # Increased from 0.0005 for better regularization
   
-  # K210-optimized augmentation (more conservative than improved)
+  # K210-optimized augmentation (aggressive settings to prevent overfitting)
   augmentation:
     hsv_h: 0.015
     hsv_s: 0.7
     hsv_v: 0.4
-    degrees: 5.0  # Reduced from 10.0 for K210 stability
-    translate: 0.1  # Reduced from 0.2 for K210 stability
-    scale: 0.1  # Reduced from 0.5 for K210 stability
+    degrees: 10.0  # Increased from 5.0 for better augmentation
+    translate: 0.2  # Increased from 0.1 for better augmentation
+    scale: 0.3  # Increased from 0.1 for better augmentation
     shear: 2.0
     perspective: 0.0
     flipud: 0.0
     fliplr: 0.5  # Horizontal flip (kept from baseline)
-    mosaic: 0.0  # Disabled for K210 memory constraints
-    mixup: 0.0   # Disabled for K210 stability
+    mosaic: 0.5  # Enabled for better generalization (was 0.0)
+    mixup: 0.3   # Enabled for regularization (was 0.0)
   
   # Improved settings for stability (matching improved_config)
   scheduler: "cosine"  # Cosine scheduling
-  warmup_epochs: 10  # Increased from 5 for K210 stability
+  warmup_epochs: 15  # Increased from 10 for aggressive LR warmup
   early_stopping:  # Early stopping configuration
-    patience: 20  # Increased from 10 for K210 (longer convergence)
+    patience: 10  # Reduced from 20 to catch overfitting earlier
     min_delta: 0.001  # Minimum improvement threshold
+    monitor: "val_loss"  # Monitor validation loss for overfitting
 
 # Data configuration (using existing YOLO dataset with different input size)
 data:
@@ -93,10 +96,12 @@ k210:
 # K210 improvements over improved_config (for reference)
 k210_optimizations:
   - "Reduced input size from 416 to 224 for K210 memory constraints"
-  - "Used YOLOv3-nano (yolov3n) instead of full YOLOv3 for smaller model"
+  - "Used YOLOv3-tiny-ultralytics instead of full YOLOv3 for smaller model"
   - "Reduced batch size from 32 to 8 for K210 memory constraints"
-  - "More conservative augmentation for embedded stability"
-  - "Disabled mosaic and mixup for K210 memory and stability"
-  - "Increased early stopping patience for longer K210 convergence"
+  - "AGGRESSIVE learning rate (1e-3, 20x increase) to fix convergence issues"
+  - "ENABLED mosaic (0.5) and mixup (0.3) to prevent severe overfitting"
+  - "Increased augmentation strength (degrees: 10°, translate: 0.2, scale: 0.3)"
+  - "Reduced early stopping patience (10) to catch overfitting earlier"
+  - "Forced SGD optimizer to prevent auto-override of learning rate"
   - "Added K210-specific export and compilation settings"
   - "Maintained all 1025 classes for full Pokemon coverage"
