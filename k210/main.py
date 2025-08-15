@@ -112,6 +112,10 @@ def main(lcd_rotation=0):
         key4 = GPIO(GPIO.GPIOHS4,GPIO.IN,GPIO.PULL_UP)
         key2 = GPIO(GPIO.GPIOHS2,GPIO.IN,GPIO.PULL_UP)
         key3 = GPIO(GPIO.GPIOHS3,GPIO.IN,GPIO.PULL_UP)
+        
+        # Boot button (IO16)
+        fm.register(16, fm.fpioa.GPIOHS5, force=True)
+        boot_key = GPIO(GPIO.GPIOHS5,GPIO.IN,GPIO.PULL_UP)
 
         flag=-1
         special_alpha=256
@@ -154,6 +158,7 @@ def main(lcd_rotation=0):
         last_key_state2=0
         last_key_state3=0
         last_key_state4=0
+        last_boot_state=0
 
         while(True):
 
@@ -162,8 +167,7 @@ def main(lcd_rotation=0):
             current_key_state4 = key4.value()
             current_key_state2 = key2.value()
             current_key_state3 = key3.value()
-
-
+            current_boot_state = boot_key.value()
 
             if flag==-1 and invert_flag and change_flag1==0 and change_flag2==0 and random_flag==0 and form_flag==0 and choose_flag==0:
                 canvas1.clear()
@@ -365,7 +369,7 @@ def main(lcd_rotation=0):
                 canvas1.draw_string(58, 224,"Press Green Button To Broswe Randomly", color=(200, 200, 200), scale=1)
                 lcd.display(canvas1)
 
-            if (current_key_state == 0 and last_key_state == 1) or change_flag1==1 or change_flag2==1 or random_flag==1 or form_flag==1 or choose_flag==1:
+            if (current_key_state == 0 and last_key_state == 1) or (current_boot_state == 0 and last_boot_state == 1) or change_flag1==1 or change_flag2==1 or random_flag==1 or form_flag==1 or choose_flag==1:
                 #print((current_key_state == 0 and last_key_state == 1),change_flag1,change_flag2,random_flag,form_flag)
                 if flag==-1:
                     if menu_collect==1:
@@ -1959,6 +1963,7 @@ def main(lcd_rotation=0):
             last_key_state4 = current_key_state4
             last_key_state2 = current_key_state2
             last_key_state3 = current_key_state3
+            last_boot_state = current_boot_state
 
 
     except Exception as e:
