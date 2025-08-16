@@ -410,42 +410,89 @@ git_config = {
 - **Runtime**: MaixPy/C uses KPU YOLO runner; since labels are full-image boxes, take top detection's class as prediction.
 - **Helper script**: `scripts/yolo/export_k210.py` automates ONNX export, nncase compilation, and packaging of artifacts.
 
-**Current Status & Learnings:**
-- **ONNX Export**: ✅ Working perfectly (398.6 MB model, simplified with onnxsim)
-- **nncase Compatibility**: ✅ Working with Python API approach
-  - nncase v1.6.0: Successfully compiles with Python API
-  - Removed CLI dependency entirely
-  - Multiple gencode approaches implemented for reliability
-- **Compilation Pipeline**: ✅ All optimization steps complete successfully
-  - Import graph, target optimization, quantization, module optimization
-  - Buffer fusion and code generation all working
-  - Memory usage summary available (445.49 MB total)
-- **Critical Issue**: ⚠️ Model Size Too Large for K210
-  - Memory Requirements:
-    - Input: 1.17 MB
-    - Output: 8.24 MB
-    - Data: 37.50 MB
-    - Model: 398.58 MB
-    - Total: 445.49 MB
-  - K210 Constraints:
-    - RAM: ~6MB
-    - Flash: ~16MB
-  - Need significant model optimization
-- **Environment Setup**: ✅ Automated nncase installation working
-  - Proper version management and dependency resolution
-  - Python API-based compilation
-  - Calibration dataset preparation (400 images)
-- **Export Pipeline Status**: ✅ Complete infrastructure ready
-  - ONNX export and simplification working
-  - Calibration dataset preparation automated
-  - All compilation steps functional
-  - Successful kmodel generation
-- **Training Success**: ✅ YOLOv3-tiny pipeline completed with 91.7% mAP50
-- **Deployment Challenge**: ❌ Model too large (49MB) for K210 constraints (16MB)
-- **Next Steps**: YOLOv5n implementation with class reduction strategy
-  - Switch to YOLOv5n (6.7x fewer parameters)
-  - Consider class grouping (1025 → 151 or hierarchical)
-  - Apply knowledge distillation from high-accuracy model
+**Critical Deployment Challenges Discovered:**
+
+1. **kmodel Version Compatibility Crisis**:
+   - **MaixPy Error**: `[MAIXPY]kpu: load_flash error:2002, ERR-KMODEL_VERSION: only support kmodel V3`
+   - **Root Cause**: Modern nncase versions generate incompatible kmodel formats
+   - **nncase v1.6.0+**: Generates kmodel v5 (❌ MaixPy incompatible)
+   - **nncase v0.2.0-beta4**: Generates kmodel v4 (🔄 Edge Impulse suggests compatible, but limited operator support)
+   - **nncase v0.1.0-rc5**: Generates kmodel v3 (✅ MaixPy compatible, but compilation failures)
+
+2. **nncase Toolchain Severe Limitations**:
+   - **v0.1.0-rc5 Issues**:
+     - ✅ Correct kmodel v3 generation for MaixPy
+     - ❌ Requires TFLite input format only
+     - ❌ Fails with "Sequence contains no elements" error
+     - ❌ TFLite version too old to support modern PyTorch operations
+     - ❌ Cannot parse complex model structures
+   - **v0.2.0-beta4 Issues**:
+     - ✅ More stable compilation pipeline
+     - ✅ Better error handling and progress tracking
+     - ❌ Extremely limited ONNX operator support:
+       - Sigmoid (YOLO activation) - NOT SUPPORTED
+       - Gather (indexing operations) - NOT SUPPORTED  
+       - Gemm (matrix multiplication) - NOT SUPPORTED
+       - GlobalAveragePool (pooling) - NOT SUPPORTED
+       - Shape (dynamic operations) - NOT SUPPORTED
+     - ❌ Even minimal models fail operator compatibility
+
+3. **Conversion Pipeline Analysis**:
+   - **ONNX Export**: ✅ Working perfectly (398.6 MB → 48.4MB after optimization)
+   - **TFLite Conversion**: ✅ Implemented with representative dataset for INT8 quantization
+   - **kmodel Compilation**: ❌ Blocked by version compatibility and operator support
+   - **Model Complexity**: ❌ YOLO architectures exceed nncase capabilities
+
+4. **Hardware vs Model Requirements**:
+   - **nncase v1.6.0+ Results**: ~12MB kmodel v5 (✅ Size within K210 Flash limit)
+   - **Critical Issue**: ❌ MaixPy firmware only supports kmodel v3, rejects v5
+   - **MaixPy Error**: `[MAIXPY]kpu: load_flash error:2002, ERR-KMODEL_VERSION: only support kmodel V3`
+   - **K210 Constraints**: ~6MB RAM, ~16MB Flash (modern nncase generates appropriately sized models)
+   - **Version Incompatibility**: Not a size problem, but firmware compatibility issue
+
+**Current Status Summary**:
+- **Export Infrastructure**: ✅ Complete ONNX/TFLite pipeline working
+- **Training Success**: ✅ YOLOv3-tiny achieving 91.7% mAP50
+- **nncase Compatibility**: ❌ Critical blocker - no viable version found
+  - v0.1.0-rc5: Correct format, compilation failures
+  - v0.2.0-beta4: Better stability, inadequate operator support
+  - v1.6.0+: Advanced features, wrong kmodel format
+- **Model Size**: ✅ Modern nncase generates appropriately sized models (~12MB within K210 limits)
+- **Deployment Viability**: ❌ Current approach not viable for K210
+
+**Alternative Strategies Required**:
+1. **Extreme Model Reduction**: 
+   - Switch to ultra-lightweight architectures (MobileNet, EfficientNet-Lite)
+   - Reduce classes dramatically (1025 → 150 or hierarchical classification)
+   - Apply aggressive pruning and quantization
+2. **Alternative Hardware**: Consider more capable edge devices (K230, ESP32-S3)
+3. **Custom Deployment**: Bypass nncase with direct K210 KPU programming
+4. **Hybrid Approach**: Two-stage classification with simplified K210 model
+
+**Detailed nncase Version Testing Results**:
+
+| nncase Version | kmodel Format | MaixPy Compatible | ONNX Support | TFLite Support | Test Results |
+|----------------|---------------|-------------------|--------------|----------------|--------------|
+| v1.6.0+ | kmodel v5 | ❌ No | ✅ Extensive | ✅ Good | ~12MB kmodel generated, but MaixPy rejects: "only support kmodel V3" |
+| v0.2.0-beta4 | kmodel v4 | 🔄 Claimed | ❌ Minimal | ⚠️ Limited | Sigmoid, Gather, Gemm unsupported |
+| v0.1.0-rc5 | kmodel v3 | ✅ Yes | ❌ None | ⚠️ Basic | "Sequence contains no elements" |
+
+**Testing Methodology Applied**:
+1. **Version Installation**: Downloaded and tested each nncase binary
+2. **Model Complexity Reduction**: Created progressively simpler test models
+3. **Input Format Testing**: Tested ONNX, TFLite, and minimal architectures
+4. **Operator Compatibility**: Systematically identified unsupported operations
+5. **Error Analysis**: Documented specific failure modes for each version
+
+**Key Technical Discoveries**:
+- **kmodel v3 vs v4 vs v5**: Format incompatibility is hardware firmware limitation, not size issue
+- **Model Size Success**: nncase v1.6.0+ generates ~12MB models (within K210 constraints)
+- **Version Incompatibility**: Primary blocker is firmware support, not model optimization
+- **TFLite Version Gap**: v0.1.0-rc5 TFLite support too old for modern PyTorch operations
+- **Operator Support Regression**: Newer nncase versions dropped basic ONNX operators
+- **Model Complexity Threshold**: Even identity models fail operator parsing in older versions
+- **TFLite Preference**: v0.1.0-rc5 only accepts TFLite input, rejects ONNX entirely
+- **Compilation Stability**: v0.2.0-beta4 more stable but insufficient operator coverage
 
 ### K210 Training Success & Deployment Challenges (COMPLETED)
 

@@ -42,6 +42,268 @@ def export_onnx(weights_path: Path, imgsz: int, outdir: Path) -> Path:
         LOGGER.error(f"ONNX export failed: {e}")
         raise
 
+def convert_onnx_to_tflite_with_version_management(onnx_path: Path, outdir: Path, imgsz: int) -> Path:
+    """Convert ONNX to TFLite using conda environment isolation for version compatibility"""
+    import subprocess
+    import sys
+    
+    LOGGER.info(f"Converting ONNX to TensorFlow Lite using conda environment isolation...")
+    
+    tflite_path = outdir / f"{onnx_path.stem}.tflite"
+    tf_env_name = "tf_conversion_temp"
+    
+    try:
+        # Check if conda is available
+        conda_path = None
+        try:
+            result = subprocess.run(["conda", "--version"], capture_output=True, text=True)
+            if result.returncode == 0:
+                conda_path = "conda"
+        except FileNotFoundError:
+            try:
+                result = subprocess.run(["/home/liuhuan/miniconda3/bin/conda", "--version"], capture_output=True, text=True)
+                if result.returncode == 0:
+                    conda_path = "/home/liuhuan/miniconda3/bin/conda"
+            except FileNotFoundError:
+                pass
+        
+        if not conda_path:
+            LOGGER.warning("Conda not found, falling back to direct conversion")
+            return _do_onnx_to_tflite_conversion(onnx_path, tflite_path, imgsz)
+        
+        LOGGER.info(f"Creating temporary conda environment: {tf_env_name}")
+        
+        # Create temporary environment with stable K210 setup
+        subprocess.check_call([
+            conda_path, "create", "-n", tf_env_name, "python=3.7", "-y", "--quiet"
+        ])
+        
+        # Install stable K210 packages (recommended working combination)
+        subprocess.check_call([
+            conda_path, "run", "-n", tf_env_name, "pip", "install",
+            "numpy==1.18.5", "tensorflow==2.3.0", "tensorflow-probability==0.11.0",
+            "onnx==1.6.0", "typing_extensions==3.7.4.3",
+            "--quiet"
+        ])
+        
+        # Try onnx-tf 1.5.0 - if it fails, we'll skip TFLite conversion
+        try:
+            subprocess.check_call([
+                conda_path, "run", "-n", tf_env_name, "pip", "install",
+                "onnx-tf==1.5.0", "--quiet"
+            ])
+            tflite_available = True
+        except subprocess.CalledProcessError:
+            LOGGER.warning("onnx-tf 1.5.0 installation failed - skipping TFLite conversion")
+            tflite_available = False
+        
+        # Create conversion script
+        conversion_script = f'''
+import sys
+from pathlib import Path
+try:
+    import onnx
+    import tensorflow as tf
+    from onnx_tf.backend import prepare
+    import shutil
+    
+    onnx_path = Path("{str(onnx_path)}")
+    tflite_path = Path("{str(tflite_path)}")
+    
+    print(f"Loading ONNX model: {{onnx_path}}")
+    onnx_model = onnx.load(str(onnx_path))
+    
+    print("Converting ONNX to TensorFlow...")
+    tf_rep = prepare(onnx_model)
+    tf_model_path = tflite_path.parent / f"{{onnx_path.stem}}_tf"
+    tf_rep.export_graph(str(tf_model_path))
+    
+    # Create representative dataset for INT8 quantization
+    def representative_dataset():
+        import cv2
+        import glob
+        import numpy as np
+        
+        # Get sample images from calibration directory  
+        calib_images = glob.glob(str(tflite_path.parent / "calib_prepared" / "*.jpg"))[:20]
+        if not calib_images:
+            # Fallback: create dummy data
+            for _ in range(8):
+                dummy_img = np.random.rand(1, 3, {imgsz}, {imgsz}).astype(np.float32)
+                yield [dummy_img]
+            return
+            
+        for img_path in calib_images:
+            try:
+                img = cv2.imread(img_path)
+                if img is None:
+                    continue
+                img = cv2.resize(img, ({imgsz}, {imgsz}))
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                img = img.astype(np.float32) / 255.0
+                img = np.transpose(img, (2, 0, 1))  # HWC to CHW
+                img = np.expand_dims(img, axis=0)   # Add batch dimension
+                yield [img]
+            except Exception as e:
+                continue
+    
+    print("Converting TensorFlow to TensorFlow Lite with representative dataset...")
+    converter = tf.lite.TFLiteConverter.from_saved_model(str(tf_model_path))
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    converter.representative_dataset = representative_dataset
+    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+    converter.inference_input_type = tf.uint8
+    converter.inference_output_type = tf.uint8
+    
+    tflite_model = converter.convert()
+    
+    with open(tflite_path, 'wb') as f:
+        f.write(tflite_model)
+    
+    print(f"TensorFlow Lite model saved: {{tflite_path}}")
+    
+    # Clean up
+    shutil.rmtree(tf_model_path, ignore_errors=True)
+    print("SUCCESS")
+    
+except Exception as e:
+    print(f"ERROR: {{e}}")
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
+'''
+        
+        # Run conversion in isolated environment
+        result = subprocess.run([
+            conda_path, "run", "-n", tf_env_name, "python", "-c", conversion_script
+        ], capture_output=True, text=True, timeout=300)
+        
+        if result.returncode == 0 and "SUCCESS" in result.stdout:
+            LOGGER.info("TensorFlow Lite conversion completed successfully")
+            LOGGER.info(result.stdout)
+            return tflite_path
+        else:
+            LOGGER.error(f"TFLite conversion failed: {result.stderr}")
+            LOGGER.error(f"Stdout: {result.stdout}")
+            raise RuntimeError(f"TFLite conversion subprocess failed")
+            
+    except subprocess.TimeoutExpired:
+        LOGGER.error("TFLite conversion timed out")
+        raise RuntimeError("TFLite conversion timed out")
+    except Exception as e:
+        LOGGER.error(f"TFLite environment setup failed: {e}")
+        # Fall back to direct conversion
+        LOGGER.warning("Falling back to direct conversion...")
+        return _do_onnx_to_tflite_conversion(onnx_path, tflite_path, imgsz)
+    finally:
+        # Clean up temporary environment
+        try:
+            subprocess.run([conda_path, "env", "remove", "-n", tf_env_name, "-y", "--quiet"], 
+                         capture_output=True, timeout=60)
+            LOGGER.info(f"Cleaned up temporary environment: {tf_env_name}")
+        except:
+            LOGGER.warning(f"Could not clean up temporary environment: {tf_env_name}")
+
+def _do_onnx_to_tflite_conversion(onnx_path: Path, tflite_path: Path, imgsz: int) -> Path:
+    """Perform the actual ONNX to TFLite conversion with numpy compatibility fix"""
+    try:
+        # Fix numpy compatibility issue for TensorFlow 2.6.0
+        import numpy as np
+        if not hasattr(np, 'object'):
+            # Restore deprecated numpy.object for TensorFlow 2.6.0 compatibility
+            np.object = object
+            np.bool = bool
+            np.int = int
+            np.float = float
+            np.complex = complex
+            np.unicode = str
+            LOGGER.info("Applied numpy compatibility patch for TensorFlow 2.6.0")
+        
+        import onnx
+        import tensorflow as tf
+        from onnx_tf.backend import prepare
+        
+        # Load ONNX model
+        onnx_model = onnx.load(str(onnx_path))
+        
+        # Convert ONNX to TensorFlow
+        tf_rep = prepare(onnx_model)
+        tf_model_path = tflite_path.parent / f"{onnx_path.stem}_tf"
+        tf_rep.export_graph(str(tf_model_path))
+        
+        # Create representative dataset for INT8 quantization
+        def representative_dataset():
+            import cv2
+            import glob
+            
+            # Get sample images from calibration directory
+            calib_images = glob.glob(str(tflite_path.parent / "calib_prepared" / "*.jpg"))[:20]
+            if not calib_images:
+                # Fallback: create dummy data
+                for _ in range(8):
+                    dummy_img = np.random.rand(1, 3, imgsz, imgsz).astype(np.float32)
+                    yield [dummy_img]
+                return
+                
+            for img_path in calib_images:
+                try:
+                    img = cv2.imread(img_path)
+                    if img is None:
+                        continue
+                    img = cv2.resize(img, (imgsz, imgsz))
+                    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                    img = img.astype(np.float32) / 255.0
+                    img = np.transpose(img, (2, 0, 1))  # HWC to CHW
+                    img = np.expand_dims(img, axis=0)   # Add batch dimension
+                    yield [img]
+                except Exception as e:
+                    continue
+        
+        # Convert TensorFlow model to TensorFlow Lite with representative dataset
+        converter = tf.lite.TFLiteConverter.from_saved_model(str(tf_model_path))
+        converter.optimizations = [tf.lite.Optimize.DEFAULT]
+        converter.representative_dataset = representative_dataset
+        converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+        converter.inference_input_type = tf.uint8
+        converter.inference_output_type = tf.uint8
+        
+        # Convert
+        tflite_model = converter.convert()
+        
+        # Save TensorFlow Lite model
+        with open(tflite_path, 'wb') as f:
+            f.write(tflite_model)
+        
+        LOGGER.info(f"TensorFlow Lite model saved: {tflite_path}")
+        
+        # Clean up temporary TensorFlow model
+        import shutil
+        shutil.rmtree(tf_model_path, ignore_errors=True)
+        
+        return tflite_path
+        
+    except ImportError as e:
+        LOGGER.error(f"Required packages not installed: {e}")
+        LOGGER.error("Please install: pip install onnx-tf tensorflow")
+        raise
+    except Exception as e:
+        LOGGER.error(f"ONNX to TensorFlow Lite conversion failed: {e}")
+        raise
+
+def convert_onnx_to_tflite(onnx_path: Path, outdir: Path, imgsz: int) -> Path:
+    """Convert ONNX model to TensorFlow Lite format for nncase v0.1.0-rc5 compatibility"""
+    LOGGER.info(f"Converting ONNX to TensorFlow Lite for nncase v0.1.0-rc5...")
+    
+    tflite_path = outdir / f"{onnx_path.stem}.tflite"
+    
+    # Try direct conversion with numpy compatibility patch first
+    try:
+        return _do_onnx_to_tflite_conversion(onnx_path, tflite_path, imgsz)
+    except Exception as e:
+        LOGGER.warning(f"Direct TFLite conversion failed: {e}")
+        LOGGER.info("Trying isolated environment approach...")
+        return convert_onnx_to_tflite_with_version_management(onnx_path, outdir, imgsz)
+
 def simplify_onnx(onnx_path: Path, outdir: Path) -> Path:
     """Simplify ONNX model for better nncase compatibility"""
     try:
@@ -233,87 +495,277 @@ if __name__ == '__main__':
 def compile_with_nncase_api(onnx_path: Path, kmodel_path: Path, calib_dir: Path, 
                         imgsz: int, mean: Tuple[float, float, float], 
                         std: Tuple[float, float, float], layout: str, quant_type: str):
-    """Compile ONNX to K210 kmodel using nncase Python API"""
-    LOGGER.info("Compiling with nncase Python API...")
+    """Compile ONNX to K210 kmodel using nncase v0.1.0-rc5 binary for MaixPy compatibility"""
+    LOGGER.info("Compiling with nncase v0.1.0-rc5 binary for MaixPy kmodel v3...")
+    
+    # Try to use the binary version first (preferred for v0.1.0-rc5)
+    try:
+        return compile_with_nncase_binary(onnx_path, kmodel_path, calib_dir, imgsz, mean, std, layout, quant_type)
+    except Exception as e:
+        LOGGER.warning(f"Binary compilation failed: {e}")
+        LOGGER.info("Falling back to Python API...")
+        
+        # Fallback to Python API if available
+        try:
+            import nncase
+            
+            # Check nncase version to determine API approach
+            nncase_version = getattr(nncase, '__version__', 'unknown')
+            LOGGER.info(f"Using nncase version: {nncase_version}")
+            
+            # For v0.1.0-rc5, use the older API structure
+            if 'v0.1.0' in nncase_version or 'dev5' in nncase_version:
+                LOGGER.info("Detected nncase v0.1.0-rc5, using compatible API...")
+                return compile_with_old_nncase_api(onnx_path, kmodel_path, calib_dir, imgsz, mean, std, layout, quant_type)
+            else:
+                LOGGER.warning(f"nncase version {nncase_version} may not be compatible with MaixPy kmodel v3")
+                LOGGER.warning("For best compatibility, please install nncase v0.1.0-rc5")
+                # Fall back to newer API approach
+                return compile_with_new_nncase_api(onnx_path, kmodel_path, calib_dir, imgsz, mean, std, layout, quant_type)
+                
+        except ImportError:
+            LOGGER.error("nncase Python API not available and binary compilation failed")
+            raise RuntimeError("No working nncase installation found")
+
+def compile_with_nncase_binary(onnx_path: Path, kmodel_path: Path, calib_dir: Path, 
+                           imgsz: int, mean: Tuple[float, float, float], 
+                           std: Tuple[float, float, float], layout: str, quant_type: str):
+    """Compile using nncase v0.1.0-rc5 binary for kmodel v3 compatibility"""
+    LOGGER.info("Using nncase v0.1.0-rc5 binary for kmodel v3 generation...")
+    
+    # First convert ONNX to TensorFlow Lite since nncase v0.1.0-rc5 only supports TensorFlow Lite
+    LOGGER.info("nncase v0.1.0-rc5 only supports TensorFlow Lite format. Converting ONNX to TensorFlow Lite...")
+    try:
+        tflite_path = convert_onnx_to_tflite(onnx_path, onnx_path.parent, imgsz)
+    except Exception as e:
+        LOGGER.error(f"ONNX to TensorFlow Lite conversion failed: {e}")
+        raise RuntimeError(f"Cannot convert ONNX to TensorFlow Lite: {e}")
+    
+    # Find ncc binary
+    ncc_path = None
+    ncc_candidates = [
+        "ncc",  # in PATH
+        str(Path.home() / ".local/bin/ncc"),  # symlink location
+        str(Path.home() / "ncc"),  # direct binary location (v0.1.0-rc5 extracts here)
+        str(Path.home() / "ncc-linux-x86_64/ncc"),  # subdirectory location (fallback)
+    ]
+    
+    for candidate in ncc_candidates:
+        try:
+            result = subprocess.run([candidate, "--version"], capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                ncc_path = candidate
+                LOGGER.info(f"Found nncase binary at: {ncc_path}")
+                break
+        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError):
+            continue
+    
+    if not ncc_path:
+        raise RuntimeError("nncase binary (ncc) not found. Please install nncase v0.1.0-rc5")
+    
+    # Build ncc command for v0.1.0-rc5 (correct format - no subcommands)
+    cmd = [
+        ncc_path,
+        str(tflite_path),    # input .tflite file
+        str(kmodel_path),    # output model file
+        "--input-format", "tflite",  # nncase v0.1.0-rc5 only supports TensorFlow Lite
+        "--output-format", "kmodel", # output to kmodel format
+        "--inference-type", quant_type,
+    ]
+    
+    # Add calibration dataset if provided
+    if calib_dir and calib_dir.exists():
+        cmd.extend(["--dataset", str(calib_dir)])
+    
+    LOGGER.info(f"Running nncase command: {' '.join(cmd)}")
     
     try:
-        import nncase
+        # Run the compilation
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)  # 5 minute timeout
         
-        # Create compile options
-        compile_options = nncase.CompileOptions()
-        compile_options.target = "k210"
-        compile_options.quant_type = quant_type
-        compile_options.input_shape = [1, 3, imgsz, imgsz]  # NCHW format
-        compile_options.input_layout = layout
-        compile_options.output_layout = layout
-        compile_options.mean = list(mean)  # Convert tuple to list
-        compile_options.std = list(std)
+        if result.returncode == 0:
+            LOGGER.info("nncase compilation completed successfully!")
+            LOGGER.info(f"Generated kmodel: {kmodel_path}")
+            
+            # Verify the output file exists
+            if kmodel_path.exists():
+                file_size = kmodel_path.stat().st_size
+                LOGGER.info(f"Output kmodel size: {file_size} bytes")
+                return True
+            else:
+                raise RuntimeError("kmodel file was not created")
+        else:
+            LOGGER.error(f"nncase compilation failed with return code {result.returncode}")
+            LOGGER.error(f"stdout: {result.stdout}")
+            LOGGER.error(f"stderr: {result.stderr}")
+            raise RuntimeError(f"nncase compilation failed: {result.stderr}")
+            
+    except subprocess.TimeoutExpired:
+        LOGGER.error("nncase compilation timed out (5 minutes)")
+        raise RuntimeError("nncase compilation timed out")
+    except Exception as e:
+        LOGGER.error(f"nncase binary execution failed: {e}")
+        raise
+
+def compile_with_old_nncase_api(onnx_path: Path, kmodel_path: Path, calib_dir: Path, 
+                            imgsz: int, mean: Tuple[float, float, float], 
+                            std: Tuple[float, float, float], layout: str, quant_type: str):
+    """Compile using nncase v0.1.0-rc5 API for kmodel v3 compatibility"""
+    import nncase
+    
+    LOGGER.info("Using nncase v0.1.0-rc5 API for kmodel v3 generation...")
+    
+    try:
+        # For older nncase, try to use the available API
+        # The exact API may vary, so we'll try multiple approaches
         
-        LOGGER.info("Creating nncase compiler...")
-        compiler = nncase.Compiler(compile_options)
-        
-        # Import ONNX
-        LOGGER.info("Importing ONNX model...")
-        import_options = nncase.ImportOptions()
-        with open(onnx_path, 'rb') as f:
-            onnx_bytes = f.read()
-        compiler.import_onnx(onnx_bytes, import_options)
-        
-        # Compile
-        LOGGER.info("Compiling model...")
-        compiler.compile()
-        
-        # Save kmodel - try multiple approaches
-        success = False
-        
-        # Approach 1: BytesIO buffer (most reliable)
+        # Approach 1: Try the most common v0.1.0-rc5 API pattern
         try:
-            LOGGER.info("Attempting BytesIO approach...")
-            import io
-            buffer = io.BytesIO()
-            compiler.gencode_tobytes(buffer)  # Use gencode_tobytes instead of gencode
-            buffer.seek(0)
+            LOGGER.info("Attempting v0.1.0-rc5 compilation approach...")
+            
+            # Create compile options (API may differ)
+            if hasattr(nncase, 'CompileOptions'):
+                compile_options = nncase.CompileOptions()
+                compile_options.target = "k210"
+                compile_options.input_shape = [1, 3, imgsz, imgsz]
+                compile_options.mean = list(mean)
+                compile_options.std = list(std)
+                
+                if hasattr(compile_options, 'quant_type'):
+                    compile_options.quant_type = quant_type
+                if hasattr(compile_options, 'input_layout'):
+                    compile_options.input_layout = layout
+                if hasattr(compile_options, 'output_layout'):
+                    compile_options.output_layout = layout
+                
+                # Create compiler
+                compiler = nncase.Compiler(compile_options)
+                
+                # Import ONNX
+                with open(onnx_path, 'rb') as f:
+                    onnx_bytes = f.read()
+                
+                if hasattr(nncase, 'ImportOptions'):
+                    import_options = nncase.ImportOptions()
+                    compiler.import_onnx(onnx_bytes, import_options)
+                else:
+                    compiler.import_onnx(onnx_bytes)
+                
+                # Compile
+                compiler.compile()
+                
+                # Generate kmodel
+                with open(kmodel_path, 'wb') as f:
+                    compiler.gencode(f)
+                
+                LOGGER.info(f"Successfully compiled {onnx_path} to {kmodel_path} (v0.1.0-rc5 API)")
+                return True
+                
+        except Exception as e:
+            LOGGER.warning(f"v0.1.0-rc5 API approach failed: {e}")
+        
+        # Approach 2: Direct function call if available
+        try:
+            if hasattr(nncase, 'compile_onnx'):
+                LOGGER.info("Attempting direct nncase.compile_onnx approach...")
+                nncase.compile_onnx(
+                    str(onnx_path),
+                    str(kmodel_path),
+                    target="k210",
+                    input_shape=[1, 3, imgsz, imgsz],
+                    mean=list(mean),
+                    std=list(std)
+                )
+                LOGGER.info(f"Successfully compiled {onnx_path} to {kmodel_path} (direct function)")
+                return True
+        except Exception as e:
+            LOGGER.warning(f"Direct function approach failed: {e}")
+        
+        raise RuntimeError("All v0.1.0-rc5 compilation approaches failed")
+        
+    except Exception as e:
+        LOGGER.error(f"Old nncase API compilation failed: {e}")
+        raise
+
+def compile_with_new_nncase_api(onnx_path: Path, kmodel_path: Path, calib_dir: Path, 
+                            imgsz: int, mean: Tuple[float, float, float], 
+                            std: Tuple[float, float, float], layout: str, quant_type: str):
+    """Compile using newer nncase API (fallback for compatibility)"""
+    import nncase
+    
+    LOGGER.warning("Using newer nncase API - may not generate kmodel v3 compatible with MaixPy")
+    
+    # Create compile options
+    compile_options = nncase.CompileOptions()
+    compile_options.target = "k210"
+    compile_options.quant_type = quant_type
+    compile_options.input_shape = [1, 3, imgsz, imgsz]  # NCHW format
+    compile_options.input_layout = layout
+    compile_options.output_layout = layout
+    compile_options.mean = list(mean)  # Convert tuple to list
+    compile_options.std = list(std)
+    
+    LOGGER.info("Creating nncase compiler...")
+    compiler = nncase.Compiler(compile_options)
+    
+    # Import ONNX
+    LOGGER.info("Importing ONNX model...")
+    import_options = nncase.ImportOptions()
+    with open(onnx_path, 'rb') as f:
+        onnx_bytes = f.read()
+    compiler.import_onnx(onnx_bytes, import_options)
+    
+    # Compile
+    LOGGER.info("Compiling model...")
+    compiler.compile()
+    
+    # Save kmodel - try multiple approaches
+    success = False
+    
+    # Approach 1: BytesIO buffer (most reliable)
+    try:
+        LOGGER.info("Attempting BytesIO approach...")
+        import io
+        buffer = io.BytesIO()
+        compiler.gencode_tobytes(buffer)  # Use gencode_tobytes instead of gencode
+        buffer.seek(0)
+        with open(kmodel_path, 'wb') as f:
+            f.write(buffer.getvalue())
+        LOGGER.info(f"Successfully compiled {onnx_path} to {kmodel_path} (using BytesIO)")
+        success = True
+    except AttributeError:
+        LOGGER.warning("gencode_tobytes not available, trying alternative approaches")
+    except Exception as e:
+        LOGGER.warning(f"BytesIO approach failed: {e}")
+    
+    # Approach 2: Get bytes directly
+    if not success:
+        try:
+            LOGGER.info("Attempting direct bytes approach...")
+            kmodel_bytes = compiler.gencode_tobytes()  # Get bytes directly
             with open(kmodel_path, 'wb') as f:
-                f.write(buffer.getvalue())
-            LOGGER.info(f"Successfully compiled {onnx_path} to {kmodel_path} (using BytesIO)")
+                f.write(kmodel_bytes)
+            LOGGER.info(f"Successfully compiled {onnx_path} to {kmodel_path} (using direct bytes)")
             success = True
         except AttributeError:
             LOGGER.warning("gencode_tobytes not available, trying alternative approaches")
         except Exception as e:
-            LOGGER.warning(f"BytesIO approach failed: {e}")
+            LOGGER.warning(f"Direct bytes approach failed: {e}")
+    
+    # Approach 3: Use string path (for older nncase versions)
+    if not success:
+        try:
+            LOGGER.info("Attempting string path approach...")
+            compiler.gencode(str(kmodel_path))  # Pass path as string
+            LOGGER.info(f"Successfully compiled {onnx_path} to {kmodel_path} (using string path)")
+            success = True
+        except Exception as e:
+            LOGGER.warning(f"String path approach failed: {e}")
+    
+    if not success:
+        raise RuntimeError("All gencode approaches failed")
         
-        # Approach 2: Get bytes directly
-        if not success:
-            try:
-                LOGGER.info("Attempting direct bytes approach...")
-                kmodel_bytes = compiler.gencode_tobytes()  # Get bytes directly
-                with open(kmodel_path, 'wb') as f:
-                    f.write(kmodel_bytes)
-                LOGGER.info(f"Successfully compiled {onnx_path} to {kmodel_path} (using direct bytes)")
-                success = True
-            except AttributeError:
-                LOGGER.warning("gencode_tobytes not available, trying alternative approaches")
-            except Exception as e:
-                LOGGER.warning(f"Direct bytes approach failed: {e}")
-        
-        # Approach 3: Use string path (for older nncase versions)
-        if not success:
-            try:
-                LOGGER.info("Attempting string path approach...")
-                compiler.gencode(str(kmodel_path))  # Pass path as string
-                LOGGER.info(f"Successfully compiled {onnx_path} to {kmodel_path} (using string path)")
-                success = True
-            except Exception as e:
-                LOGGER.warning(f"String path approach failed: {e}")
-        
-        if not success:
-            raise RuntimeError("All gencode approaches failed")
-            
-        return True
-            
-    except Exception as e:
-        LOGGER.error(f"nncase compilation failed: {e}")
-        raise
+    return True
 
 def main():
     """Main export function"""
@@ -388,7 +840,8 @@ def main():
             
     except Exception as e:
         LOGGER.error(f"nncase compilation failed: {e}")
-        LOGGER.error("Please ensure nncase v1.6.0 is installed correctly.")
+        LOGGER.error("Please ensure nncase v0.1.0-rc5 is installed correctly for MaixPy kmodel v3 compatibility.")
+        LOGGER.error("Install with: conda run -n pokemon-classifier python scripts/common/setup_environment.py --k210-only")
         return 1
         
     # Package artifacts

@@ -179,78 +179,46 @@ def verify_k210_installation(env_name="pokemon-classifier"):
     conda_path = get_conda_path()
     success = True
     
-    # Check Python packages
-    k210_packages = ["onnx", "onnxruntime", "onnxsim", "nncase"]
-    for package in k210_packages:
+    # Check Python packages (excluding nncase which is used as binary)
+    # Map package names to their import names
+    k210_packages = {
+        "onnx": "onnx",
+        "onnxruntime": "onnxruntime", 
+        "onnxsim": "onnxsim",
+        "tensorflow": "tensorflow",
+        "onnx-tf": "onnx_tf"
+    }
+    
+    for package_name, import_name in k210_packages.items():
         try:
             result = subprocess.run([
                 conda_path, "run", "-n", env_name, "python", "-c", 
-                f"import {package}; print('OK')"
+                f"import {import_name}; print('OK')"
             ], capture_output=True, text=True)
             
             if result.returncode == 0:
-                print(f"  ✅ {package}")
+                print(f"  ✅ {package_name}")
             else:
-                print(f"  ❌ {package}")
+                print(f"  ❌ {package_name} (import error: {result.stderr.strip() if result.stderr else 'unknown'})")
                 success = False
-        except Exception:
-            print(f"  ❌ {package}")
+        except Exception as e:
+            print(f"  ❌ {package_name} (exception: {str(e)})")
             success = False
     
-    # Check nncase Python API with actual compilation test
+    # Check nncase binary availability
     try:
-        # Create a tiny test ONNX model
-        test_dir = Path.home() / ".k210_test"
-        test_dir.mkdir(exist_ok=True)
-        test_onnx = test_dir / "test.onnx"
-        test_kmodel = test_dir / "test.kmodel"
-        
-        # Use onnx to create a tiny model
-        import onnx
-        from onnx import helper, TensorProto
-        X = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 1, 2, 2])
-        Y = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 1, 2, 2])
-        node = helper.make_node('Identity', ['input'], ['output'])
-        graph = helper.make_graph([node], 'test', [X], [Y])
-        model = helper.make_model(graph)
-        onnx.save(model, str(test_onnx))
-        
-        # Try to compile with nncase Python API
-        import nncase
-        
-        # Create compile options
-        compile_options = nncase.CompileOptions()
-        compile_options.target = "k210"
-        compile_options.quant_type = "int8"
-        compile_options.input_shape = [1, 1, 2, 2]
-        compile_options.input_layout = "NCHW"
-        compile_options.output_layout = "NCHW"
-        compile_options.mean = [0.0]
-        compile_options.std = [255.0]
-        
-        # Create compiler
-        compiler = nncase.Compiler(compile_options)
-        
-        # Import ONNX
-        import_options = nncase.ImportOptions()
-        with open(test_onnx, 'rb') as f:
-            onnx_bytes = f.read()
-        compiler.import_onnx(onnx_bytes, import_options)
-        
-        # Compile
-        compiler.compile()
-        
-        # Generate kmodel
-        with open(test_kmodel, 'wb') as f:
-            compiler.gencode(f)
-        
-        # Clean up test files
-        shutil.rmtree(test_dir)
-        
-        print("  ✅ nncase Python API (compilation test passed)")
-    except Exception as e:
-        print(f"  ❌ nncase Python API test failed: {e}")
+        result = subprocess.run(["ncc", "--version"], capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            print("  ✅ nncase binary (ncc)")
+        else:
+            print("  ❌ nncase binary (ncc)")
+            success = False
+    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError):
+        print("  ❌ nncase binary (ncc)")
         success = False
+    
+    # Test nncase binary compilation with a simple test
+    print("  📋 nncase binary test: Use export_k210.py for full compilation testing")
     
     # Check K210 runtime
     runtime_dir = Path.home() / "nncaseruntime-k210"
@@ -346,15 +314,43 @@ def install_yolo_dependencies(env_name="pokemon-classifier"):
         return False
 
 def install_k210_dependencies(env_name="pokemon-classifier"):
-    """Install K210 export dependencies including nncase"""
+    """Install K210 export dependencies including nncase v0.1.0-rc5 for MaixPy compatibility"""
     print("📦 Installing K210 export dependencies...")
     try:
         conda_path = get_conda_path()
-        # Install nncase and related packages for K210 compilation
+        # Install onnx and related packages for K210 compilation
+        print("  🔄 Installing onnx, onnxruntime, onnxsim...")
         subprocess.check_call([
             conda_path, "run", "-n", env_name, "uv", "pip", "install", 
-            "onnx", "onnxruntime", "onnxsim", "nncase"
+            "onnx", "onnxruntime", "onnxsim", "--verbose"
         ])
+        print("  ✅ ONNX packages installed!")
+        
+        # Install additional dependencies for ONNX to TensorFlow Lite conversion
+        print("📦 Installing ONNX to TensorFlow Lite conversion dependencies...")
+        print("  🔄 Installing tensorflow (this may take a few minutes)...")
+        subprocess.check_call([
+            conda_path, "run", "-n", env_name, "uv", "pip", "install", 
+            "tensorflow", "--verbose"
+        ])
+        print("  ✅ TensorFlow installed!")
+        
+        print("  🔄 Installing onnx-tf and dependencies...")
+        subprocess.check_call([
+            conda_path, "run", "-n", env_name, "uv", "pip", "install", 
+            "onnx-tf", "tensorflow-probability==0.14.1", "--verbose"
+        ])
+        
+        print("  🔄 Fixing version compatibility issues...")
+        subprocess.check_call([
+            conda_path, "run", "-n", env_name, "uv", "pip", "install", 
+            "protobuf==3.20.3", "numpy==1.19.5", "--verbose"
+        ])
+        
+        # Note: nncase v0.1.0-rc5 will be installed as prebuilt binary by install_k210_tooling()
+        print("📝 Note: nncase v0.1.0-rc5 binary will be installed separately for MaixPy compatibility")
+        print("📝 Note: Added TensorFlow and onnx-tf for ONNX→TensorFlow Lite conversion (nncase v0.1.0-rc5 requirement)")
+        
         print("✅ K210 export dependencies installed successfully!")
         return True
     except subprocess.CalledProcessError as e:
@@ -445,8 +441,8 @@ def install_k210_tooling(env_name="pokemon-classifier"):
         except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError):
             continue
     
-    # Install K210 runtime and nncase v1.6.0 first
-    print("📦 Installing K210 runtime and nncase v1.6.0...")
+    # Install nncase v0.1.0-rc5 for MaixPy kmodel v3 compatibility
+    print("📦 Installing nncase v0.1.0-rc5 for MaixPy kmodel v3 compatibility...")
     try:
         conda_path = get_conda_path()
         # First uninstall any existing nncase to avoid conflicts
@@ -454,39 +450,110 @@ def install_k210_tooling(env_name="pokemon-classifier"):
             conda_path, "run", "-n", env_name, "uv", "pip", "uninstall", "nncase", "-y"
         ], capture_output=True)
         
-        # Download and extract K210 runtime
-        runtime_url = "https://github.com/kendryte/nncase/releases/download/v1.6.0/nncaseruntime-k210.zip"
-        runtime_zip = Path.home() / "nncaseruntime-k210.zip"
-        runtime_dir = Path.home() / "nncaseruntime-k210"
+        # Download and install prebuilt nncase v0.1.0-rc5 binary
+        nncase_installed = False
+        home_dir = Path.home().resolve()
+        nncase_archive = home_dir / "ncc-linux-x86_64.tar.xz"
+        nncase_dir = home_dir / "ncc-linux-x86_64"
         
-        if not runtime_dir.exists():
-            print("📥 Downloading K210 runtime...")
-            subprocess.check_call(["wget", "-O", str(runtime_zip), runtime_url])
-            
-            # Extract runtime
-            subprocess.check_call(["unzip", "-o", str(runtime_zip), "-d", str(runtime_dir)])
-            runtime_zip.unlink()  # Clean up zip file
-            
-            # Add to PATH
-            os.environ["PATH"] = f"{runtime_dir}/bin:{os.environ.get('PATH', '')}"
-            
-            # Create symlinks in ~/.local/bin
-            local_bin = Path.home() / ".local" / "bin"
-            local_bin.mkdir(parents=True, exist_ok=True)
-            for binary in runtime_dir.glob("bin/*"):
-                symlink = local_bin / binary.name
-                if symlink.exists():
-                    symlink.unlink()
-                symlink.symlink_to(binary)
-            
-            print("✅ K210 runtime installed!")
+        print(f"📍 Home directory: {home_dir}")
+        print(f"📍 Archive path: {nncase_archive}")
+        print(f"📍 Extract directory: {nncase_dir}")
         
-        # Install nncase v1.6.0 which supports K210
-        subprocess.check_call([
-            conda_path, "run", "-n", env_name, "uv", "pip", "install", 
-            "https://github.com/kendryte/nncase/releases/download/v1.6.0/nncase-1.6.0.20220505-cp39-cp39-manylinux_2_24_x86_64.whl"
-        ])
-        print("✅ nncase v1.6.0 installed!")
+        # Check if already downloaded and valid
+        need_download = True
+        if nncase_archive.exists():
+            file_size = nncase_archive.stat().st_size
+            print(f"📊 Existing file size: {file_size} bytes")
+            if file_size > 1000000:  # Should be around 50MB
+                print(f"✅ nncase binary already exists at: {nncase_archive}")
+                need_download = False
+            else:
+                print(f"⚠️ Existing file too small ({file_size} bytes), re-downloading...")
+                nncase_archive.unlink()  # Remove corrupted file
+        
+        if need_download:
+            print("📥 Downloading nncase v0.1.0-rc5 prebuilt binary...")
+            print("  🔄 Downloading ~8MB archive (may take 30-60 seconds)...")
+            try:
+                subprocess.check_call([
+                    "wget", "--progress=bar:force", "-O", str(nncase_archive),
+                    "https://github.com/kendryte/nncase/releases/download/v0.1.0-rc5/ncc-linux-x86_64.tar.xz"
+                ])
+                
+                # Verify the download
+                if nncase_archive.exists():
+                    file_size = nncase_archive.stat().st_size
+                    print(f"📊 Downloaded file size: {file_size} bytes")
+                    if file_size < 1000000:
+                        raise RuntimeError(f"Downloaded file too small ({file_size} bytes), likely corrupted")
+                    print(f"✅ nncase binary downloaded to: {nncase_archive}")
+                else:
+                    raise RuntimeError("Download completed but file not found")
+            except subprocess.CalledProcessError as e:
+                print(f"❌ Failed to download nncase binary: {e}")
+                raise
+        
+        # Extract the binary if not already extracted
+        ncc_binary_direct = home_dir / "ncc"  # Binary extracts directly to home directory
+        
+        if not ncc_binary_direct.exists():
+            print(f"📦 Extracting nncase binary from {nncase_archive} to {home_dir}...")
+            print("  🔄 Extracting archive (should complete in ~10 seconds)...")
+            try:
+                # Use absolute paths for extraction
+                subprocess.check_call([
+                    "tar", "-xf", str(nncase_archive), "-C", str(home_dir)
+                ])
+                print(f"✅ nncase binary extracted to: {home_dir}")
+                
+                # Verify extraction - list what was actually extracted
+                ncc_files = list(home_dir.glob("ncc*"))
+                print(f"📂 Extracted ncc files: {[f.name for f in ncc_files]}")
+                
+                if not ncc_binary_direct.exists():
+                    raise RuntimeError(f"ncc binary not found at {ncc_binary_direct}")
+                    
+            except subprocess.CalledProcessError as e:
+                print(f"❌ Failed to extract nncase binary: {e}")
+                raise
+        else:
+            print(f"✅ nncase binary already extracted at: {ncc_binary_direct}")
+        
+        # Create symlink in ~/.local/bin for easy access
+        local_bin = home_dir / ".local" / "bin"
+        local_bin.mkdir(parents=True, exist_ok=True)
+        ncc_symlink = local_bin / "ncc"
+        
+        print(f"📍 Found ncc binary at: {ncc_binary_direct}")
+        print(f"🔗 Creating symlink at: {ncc_symlink}...")
+        
+        if ncc_binary_direct.exists():
+            if ncc_symlink.exists():
+                ncc_symlink.unlink()
+            ncc_symlink.symlink_to(ncc_binary_direct.resolve())
+            ncc_symlink.chmod(0o755)
+            print(f"✅ Created ncc symlink: {ncc_symlink} -> {ncc_binary_direct}")
+            nncase_installed = True
+        else:
+            print(f"❌ ncc binary not found at {ncc_binary_direct}")
+            # List what files are actually in the home directory
+            ncc_files = list(home_dir.glob("ncc*"))
+            print(f"📂 ncc files in home directory: {[f.name for f in ncc_files]}")
+        
+        # Also add to PATH for current session
+        local_bin_str = str(local_bin.resolve())
+        if local_bin_str not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = f"{local_bin_str}:{os.environ.get('PATH', '')}"
+            print(f"📍 Added to PATH: {local_bin_str}")
+        
+        if not nncase_installed:
+            print("⚠️ Binary installation failed. Manual installation required:")
+            print("💡 Please install nncase v0.1.0-rc5 manually:")
+            print("   cd ~")
+            print("   wget https://github.com/kendryte/nncase/releases/download/v0.1.0-rc5/ncc-linux-x86_64.tar.xz")
+            print("   tar xf ncc-linux-x86_64.tar.xz")
+            print("   export PATH=$HOME/ncc-linux-x86_64:$PATH")
         
         # Check if ncc is now available
         result = subprocess.run([conda_path, "run", "-n", env_name, "which", "ncc"], 
@@ -522,21 +589,19 @@ def install_k210_tooling(env_name="pokemon-classifier"):
     
     print("\n⚠️ nncase compiler (ncc) installation failed.")
     print("\n📋 Manual Installation Options:")
-    print("1. Download working nncase binary (recommended):")
+    print("1. Download nncase v0.1.0-rc5 binary (recommended for MaixPy compatibility):")
     print("   cd ~")
-    print("   wget https://github.com/kendryte/nncase_old/releases/download/v1.0/ncc-linux-x86_64.tar.xz")
-    print("   tar -xJf ncc-linux-x86_64.tar.xz")
-    print("   mv ncc-linux-x86_64 ncc_k210")
-    print("   export PATH=$HOME/ncc_k210:$PATH")
+    print("   wget https://github.com/kendryte/nncase/releases/download/v0.1.0-rc5/ncc-linux-x86_64.tar.xz")
+    print("   tar xf ncc-linux-x86_64.tar.xz")
+    print("   export PATH=$HOME/ncc-linux-x86_64:$PATH")
     print("   # Optional: add to ~/.bashrc for permanent access")
-    print("2. Install nncase Python package:")
-    print("   pip install nncase==1.6.0")
-    print("3. Build from source:")
-    print("   git clone https://github.com/kendryte/nncase.git")
+    print("2. Create symlink for easy access:")
+    print("   ln -sf $HOME/ncc-linux-x86_64/ncc ~/.local/bin/ncc")
+    print("3. Build from source (advanced):")
+    print("   git clone --branch v0.1.0-rc5 https://github.com/kendryte/nncase.git")
     print("   cd nncase && mkdir build && cd build")
     print("   cmake .. && make -j$(nproc)")
-    print("   sudo make install")
-    print("\n💡 The export script will use the CLI approach to avoid Python API issues.")
+    print("\n💡 The export script will use nncase v0.1.0-rc5 to generate kmodel v3 for MaixPy.")
     print("   Make sure ncc is in PATH or use --ncc /path/to/ncc")
     
     return False
@@ -751,6 +816,8 @@ def main():
         print("\n🎉 K210 tooling setup complete!")
         print("\n📋 Next steps:")
         print("  • Export trained model: python scripts/yolo/export_k210.py --weights model.pt --calib-dir calib")
+        print("  • The export script will convert: YOLO .pt → ONNX → TensorFlow Lite → kmodel v3")
+        print("  • nncase v0.1.0-rc5 will generate MaixPy-compatible kmodel v3 files")
         print("  • Deploy kmodel and classes.txt to Maix Bit SD card")
         return
 
@@ -818,7 +885,8 @@ def main():
     if args.experiment == "yolo":
         print(f"\n🚀 For K210 deployment:")
         print(f"  • Export trained model: python scripts/yolo/export_k210.py --weights model.pt --calib-dir calib")
-        print(f"  • The export script will handle nncase installation automatically")
+        print(f"  • Conversion pipeline: YOLO .pt → ONNX → TensorFlow Lite → kmodel v3 (MaixPy compatible)")
+        print(f"  • The export script uses nncase v0.1.0-rc5 to generate kmodel v3")
         print(f"  • Deploy kmodel and classes.txt to Maix Bit SD card")
     
     print(f"\n💡 For Google Colab:")

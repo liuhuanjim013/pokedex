@@ -191,17 +191,18 @@
      - Architecture: Tiny/efficient variants
 
 2. **nncase Version & API Rules**
-   - **Version**: Use nncase v1.6.0 (confirmed working)
-   - **API Approach**: Use Python API directly, avoid CLI
+   - **Version**: Use nncase v0.1.0-rc5 (MaixPy kmodel v3 compatibility)
+   - **Critical Issue**: nncase v1.6.0+ generates kmodel v5 which is NOT compatible with MaixPy
+   - **MaixPy Requirement**: Only supports kmodel v3, requires nncase v0.1.0-rc5
+   - **API Approach**: Use Python API with version detection and fallbacks
    - **Compilation Flow**: 
-     1. Import ONNX model
-     2. Configure compiler options
-     3. Compile model
-     4. Generate kmodel using multiple approaches
-   - **Error Handling**: Try multiple gencode approaches in order:
-     1. BytesIO buffer with gencode_tobytes
-     2. Direct bytes with gencode_tobytes
-     3. String path with gencode (fallback)
+     1. Detect nncase version
+     2. Use v0.1.0-rc5 API for kmodel v3 generation
+     3. Fallback to newer API with warnings
+   - **Error Handling**: Try multiple API approaches based on version:
+     1. v0.1.0-rc5 API with direct gencode
+     2. Direct function calls if available
+     3. Newer API as fallback (with compatibility warnings)
 
 3. **Environment Setup Requirements**
    - **Installation**: Use `setup_environment.py` with `--k210-only` flag
