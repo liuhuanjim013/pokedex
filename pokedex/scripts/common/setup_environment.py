@@ -31,16 +31,98 @@ def get_conda_path():
     except:
         pass
     # Fallback to common local paths
-    for path in ["/home/liuhuan/miniconda3/bin/conda", "/opt/conda/bin/conda"]:
+    for path in [
+        os.path.expanduser("~/miniconda3/bin/conda"),  # User's home directory
+        "/home/liuhuan/miniconda3/bin/conda", 
+        "/opt/conda/bin/conda"
+    ]:
         if os.path.exists(path):
             return path
-    return "conda"  # Fallback to PATH
+    return None  # Return None if conda is not found
 
 def create_conda_environment(env_name="pokemon-classifier", python_version="3.9"):
     """Create conda environment for the project"""
     print(f"🐍 Creating conda environment: {env_name}")
+    
+    conda_path = get_conda_path()
+    if conda_path is None:
+        print("❌ Conda is not installed on this system.")
+        print("📦 Installing Miniconda automatically...")
+        
+        # Install Miniconda using the existing setup_colab_environment logic
+        try:
+            # Check if installer is already downloaded
+            installer = "Miniconda3-latest-Linux-x86_64.sh"
+            if not os.path.exists(installer):
+                print("📥 Downloading Miniconda installer...")
+                subprocess.check_call([
+                    "wget", f"https://repo.anaconda.com/miniconda/{installer}"
+                ])
+            else:
+                print("✅ Miniconda installer already downloaded")
+            
+            # Install Miniconda to user's home directory
+            conda_install_path = os.path.expanduser("~/miniconda3")
+            print(f"📁 Installing conda in {conda_install_path}...")
+            
+            # Check if conda installation is complete (has bin directory with conda executable)
+            conda_bin_path = os.path.join(conda_install_path, "bin", "conda")
+            if not os.path.exists(conda_bin_path):
+                print(f"📦 Installing conda to {conda_install_path}...")
+                # If directory exists but is incomplete, try to update it
+                if os.path.exists(conda_install_path):
+                    print("🔄 Found incomplete conda installation, attempting to update...")
+                    subprocess.check_call([
+                        "bash", installer, "-b", "-u", "-p", conda_install_path
+                    ])
+                else:
+                    subprocess.check_call([
+                        "bash", installer, "-b", "-p", conda_install_path
+                    ])
+                
+                # Verify installation
+                if not os.path.exists(conda_bin_path):
+                    raise RuntimeError(f"Conda installation failed - {conda_bin_path} not found")
+                
+                # Add conda to PATH
+                os.environ["PATH"] = f"{conda_install_path}/bin:" + os.environ.get("PATH", "")
+                
+                # Initialize conda for shell
+                subprocess.check_call([conda_bin_path, "init"])
+                
+                print("✅ Conda installed successfully")
+            else:
+                print(f"✅ Conda already installed at {conda_install_path}")
+                # Add conda to PATH if not already there
+                if f"{conda_install_path}/bin" not in os.environ.get("PATH", ""):
+                    os.environ["PATH"] = f"{conda_install_path}/bin:" + os.environ.get("PATH", "")
+            
+            # Clean up installer
+            if os.path.exists(installer):
+                os.remove(installer)
+            
+            # Accept Terms of Service
+            if not accept_conda_tos():
+                raise RuntimeError("Failed to accept conda Terms of Service")
+            
+            # Update conda_path to the newly installed conda
+            conda_path = f"{conda_install_path}/bin/conda"
+            
+            # Update PATH for subsequent operations
+            os.environ["PATH"] = f"{conda_install_path}/bin:" + os.environ.get("PATH", "")
+            
+        except Exception as e:
+            print(f"❌ Failed to install conda: {e}")
+            print("\n📋 Manual installation instructions:")
+            print("  1. Install Miniconda (recommended):")
+            print("     wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh")
+            print("     bash Miniconda3-latest-Linux-x86_64.sh")
+            print("     source ~/.bashrc")
+            print("  2. Or use the --colab flag if you're in Google Colab")
+            print("\n💡 After installing conda, run this script again.")
+            return False
+    
     try:
-        conda_path = get_conda_path()
         # Check if environment already exists
         result = subprocess.run([conda_path, "env", "list"], capture_output=True, text=True)
         if env_name in result.stdout:
@@ -62,6 +144,9 @@ def install_uv():
     print("📦 Installing uv...")
     try:
         conda_path = get_conda_path()
+        if conda_path is None:
+            print("❌ Conda is not available. Cannot install uv.")
+            return False
         subprocess.check_call([conda_path, "install", "-c", "conda-forge", "uv", "-y"])
         print("✅ uv installed successfully!")
         return True
@@ -74,6 +159,9 @@ def install_dependencies_with_uv(requirements_file, env_name="pokemon-classifier
     print(f"📦 Installing dependencies from {requirements_file}...")
     try:
         conda_path = get_conda_path()
+        if conda_path is None:
+            print("❌ Conda is not available. Cannot install dependencies.")
+            return False
         # Use conda run to execute uv in the specified environment
         subprocess.check_call([
             conda_path, "run", "-n", env_name, "uv", "pip", "install", "-r", requirements_file
@@ -88,6 +176,21 @@ def accept_conda_tos():
     """Accept conda Terms of Service for required channels."""
     print("📜 Accepting conda Terms of Service...")
     conda_path = get_conda_path()
+    if conda_path is None:
+        # Try to find conda in common locations
+        for path in [
+            os.path.expanduser("~/miniconda3/bin/conda"),
+            "/home/liuhuan/miniconda3/bin/conda",
+            "/opt/conda/bin/conda"
+        ]:
+            if os.path.exists(path):
+                conda_path = path
+                break
+    
+    if conda_path is None:
+        print("❌ Conda is not available. Cannot accept Terms of Service.")
+        return False
+    
     channels = [
         "https://repo.anaconda.com/pkgs/main",
         "https://repo.anaconda.com/pkgs/r",
@@ -113,11 +216,14 @@ def setup_colab_environment():
     
     # Check if conda is already available
     conda_path = get_conda_path()
-    try:
-        subprocess.check_call([conda_path, "--version"])
-        print("✅ Conda is already available")
-        return
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    if conda_path is not None:
+        try:
+            subprocess.check_call([conda_path, "--version"])
+            print("✅ Conda is already available")
+            return
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            print("🔍 Conda not found, will install...")
+    else:
         print("🔍 Conda not found, will install...")
     
     # Check if installer is already downloaded
@@ -177,6 +283,9 @@ def verify_k210_installation(env_name="pokemon-classifier"):
     print("🔍 Verifying K210 tooling installation...")
     
     conda_path = get_conda_path()
+    if conda_path is None:
+        print("❌ Conda is not available. Cannot verify K210 installation.")
+        return False
     success = True
     
     # Check Python packages (excluding nncase which is used as binary)
@@ -240,6 +349,9 @@ def verify_installation(env_name="pokemon-classifier"):
     print("🔍 Verifying installation...")
     
     conda_path = get_conda_path()
+    if conda_path is None:
+        print("❌ Conda is not available. Cannot verify installation.")
+        return False
     required_packages = [
         # Core ML packages
         "numpy", "pandas", "matplotlib", "seaborn", 
@@ -282,6 +394,9 @@ def install_huggingface_dependencies(env_name="pokemon-classifier"):
     print("📦 Installing Hugging Face dependencies...")
     try:
         conda_path = get_conda_path()
+        if conda_path is None:
+            print("❌ Conda is not available. Cannot install Hugging Face dependencies.")
+            return False
         # Install datasets and huggingface_hub
         subprocess.check_call([
             conda_path, "run", "-n", env_name, "uv", "pip", "install", 
@@ -302,6 +417,9 @@ def install_yolo_dependencies(env_name="pokemon-classifier"):
     print("📦 Installing YOLO training dependencies...")
     try:
         conda_path = get_conda_path()
+        if conda_path is None:
+            print("❌ Conda is not available. Cannot install YOLO dependencies.")
+            return False
         # Install ultralytics for YOLO training
         subprocess.check_call([
             conda_path, "run", "-n", env_name, "uv", "pip", "install", 
@@ -318,6 +436,9 @@ def install_k210_dependencies(env_name="pokemon-classifier"):
     print("📦 Installing K210 export dependencies...")
     try:
         conda_path = get_conda_path()
+        if conda_path is None:
+            print("❌ Conda is not available. Cannot install K210 dependencies.")
+            return False
         # Install onnx and related packages for K210 compilation
         print("  🔄 Installing onnx, onnxruntime, onnxsim...")
         subprocess.check_call([
@@ -445,6 +566,9 @@ def install_k210_tooling(env_name="pokemon-classifier"):
     print("📦 Installing nncase v0.1.0-rc5 for MaixPy kmodel v3 compatibility...")
     try:
         conda_path = get_conda_path()
+        if conda_path is None:
+            print("❌ Conda is not available. Cannot install nncase.")
+            return False
         # First uninstall any existing nncase to avoid conflicts
         subprocess.run([
             conda_path, "run", "-n", env_name, "uv", "pip", "uninstall", "nncase", "-y"
@@ -732,15 +856,19 @@ if __name__ == '__main__':
     
     # Create wrapper in conda environment bin directory
     conda_path = get_conda_path()
-    result = subprocess.run([conda_path, "run", "-n", env_name, "python", "-c", 
-                           "import sys; print(sys.prefix)"], 
-                          capture_output=True, text=True)
-    if result.returncode == 0:
-        env_prefix = result.stdout.strip()
-        wrapper_path = Path(env_prefix) / "bin" / "ncc"
-    else:
-        # Fallback to user local bin
+    if conda_path is None:
+        # Fallback to user local bin if conda is not available
         wrapper_path = Path.home() / ".local" / "bin" / "ncc"
+    else:
+        result = subprocess.run([conda_path, "run", "-n", env_name, "python", "-c", 
+                               "import sys; print(sys.prefix)"], 
+                              capture_output=True, text=True)
+        if result.returncode == 0:
+            env_prefix = result.stdout.strip()
+            wrapper_path = Path(env_prefix) / "bin" / "ncc"
+        else:
+            # Fallback to user local bin
+            wrapper_path = Path.home() / ".local" / "bin" / "ncc"
     
     wrapper_path.parent.mkdir(parents=True, exist_ok=True)
     
