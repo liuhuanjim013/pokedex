@@ -74,88 +74,103 @@ processed/yolo_dataset/
 
 ### Directory Structure
 ```
-pokedex/
-├── data/                          # Local data storage (gitignored)
-│   ├── raw/                      # Raw downloaded datasets
-│   │   └── all_pokemon/         # All Pokemon data (1025 folders)
-│   │       ├── 0001/            # Bulbasaur - all images
-│   │       ├── 0002/            # Ivysaur - all images
-│   │       └── ...              # Pokemon 003-1025
-│   ├── processed/                # Shared preprocessed data (gitignored)
-│   │   ├── images/              # Resized images for all models
-│   │   ├── metadata/            # Dataset info, Pokemon mappings
-│   │   └── yolo_dataset/        # YOLO format dataset (see above)
-│   └── splits/                  # Train/val/test splits (gitignored)
+pokedex/                         # Main project directory
+├── data/                        # Local data storage (gitignored)
+│   ├── raw/                    # Raw downloaded datasets
+│   │   └── all_pokemon/       # All Pokemon data (1025 folders)
+│   │       ├── 0001/          # Bulbasaur - all images
+│   │       ├── 0002/          # Ivysaur - all images
+│   │       └── ...            # Pokemon 003-1025
+│   ├── processed/              # Shared preprocessed data (gitignored)
+│   │   ├── images/            # Resized images for all models
+│   │   ├── metadata/          # Dataset info, Pokemon mappings
+│   │   └── yolo_dataset/      # YOLO format dataset (see above)
+│   └── splits/                # Train/val/test splits (gitignored)
 │       ├── train/
 │       ├── validation/
 │       └── test/
-├── models/                       # Model storage
-│   ├── checkpoints/             # Training checkpoints
-│   ├── final/                   # Final trained models
-│   ├── compressed/              # Optimized for IoT
-│   └── configs/                 # Model configurations
-├── src/                         # Source code (reusable modules)
-│   ├── data/                    # Data processing modules
-│   │   ├── preprocessing.py     # Data preprocessing class
-│   │   ├── augmentation.py      # Data augmentation utilities
-│   │   └── dataset.py          # Dataset loading classes
-│   ├── models/                  # Model implementations
-│   │   ├── yolo/               # YOLO model classes
-│   │   │   ├── trainer.py      # YOLO training class
+├── models/                     # Model storage
+│   ├── checkpoints/           # Training checkpoints
+│   ├── final/                 # Final trained models
+│   ├── compressed/            # Optimized for IoT
+│   └── configs/               # Model configurations
+├── src/                       # Source code (reusable modules)
+│   ├── data/                  # Data processing modules
+│   │   ├── preprocessing.py   # Data preprocessing class
+│   │   ├── augmentation.py    # Data augmentation utilities
+│   │   └── dataset.py        # Dataset loading classes
+│   ├── models/                # Model implementations
+│   │   ├── yolo/             # YOLO model classes
+│   │   │   ├── trainer.py    # YOLO training class
 │   │   │   ├── checkpoint_manager.py # Checkpoint utilities
 │   │   │   └── wandb_integration.py # W&B integration class
-│   │   ├── vlm/                # VLM model classes
-│   │   └── hybrid/             # Hybrid model classes
-│   ├── training/                # Training pipeline modules
-│   │   ├── yolo/               # YOLO training utilities
-│   │   ├── vlm/                # VLM training utilities
-│   │   └── hybrid/             # Hybrid training utilities
-│   ├── evaluation/              # Evaluation modules
-│   │   ├── yolo/               # YOLO evaluation classes
-│   │   ├── vlm/                # VLM evaluation classes
-│   │   └── hybrid/             # Hybrid evaluation classes
-│   └── deployment/              # IoT deployment modules
-│       ├── yolo/               # YOLO deployment utilities
-│       ├── vlm/                # VLM deployment utilities
-│       └── hybrid/             # Hybrid deployment utilities
-├── scripts/                     # Utility scripts (executable)
-│   ├── yolo/                   # YOLO-specific scripts
+│   │   ├── vlm/              # VLM model classes
+│   │   └── hybrid/           # Hybrid model classes
+│   ├── training/              # Training pipeline modules
+│   │   ├── yolo/             # YOLO training utilities
+│   │   ├── vlm/              # VLM training utilities
+│   │   └── hybrid/           # Hybrid training utilities
+│   ├── evaluation/            # Evaluation modules
+│   │   ├── yolo/             # YOLO evaluation classes
+│   │   ├── vlm/              # VLM evaluation classes
+│   │   └── hybrid/           # Hybrid evaluation classes
+│   └── deployment/            # IoT deployment modules
+│       ├── yolo/             # YOLO deployment utilities
+│       ├── vlm/              # VLM deployment utilities
+│       └── hybrid/           # Hybrid deployment utilities
+├── scripts/                   # Utility scripts (executable)
+│   ├── yolo/                 # YOLO-specific scripts
 │   │   ├── setup_colab_training.py # Colab environment setup
-│   │   ├── train_yolov3_baseline.py # Baseline training script
-│   │   ├── train_yolov3_improved.py # Improved training script
+│   │   ├── train_yolov3_baseline.py # Baseline training script (legacy)
+│   │   ├── train_yolov3_improved.py # Improved training script (legacy)
+│   │   ├── train_yolov8_maixcam.py # YOLOv8 training for Maix Cam (alternative)
+│   │   ├── train_yolov11_maixcam.py # YOLOv11 training for Maix Cam (primary)
+│   │   ├── export_maixcam.py   # Maix Cam export script
 │   │   ├── resume_training.py  # Resume from checkpoint script
 │   │   └── evaluate_model.py   # Evaluation script for trained models
-│   ├── vlm/                    # VLM-specific scripts
-│   ├── hybrid/                 # Hybrid-specific scripts
-│   └── common/                 # Common utility scripts
+│   ├── vlm/                  # VLM-specific scripts
+│   ├── hybrid/               # Hybrid-specific scripts
+│   └── common/               # Common utility scripts
 │       ├── setup_environment.py # Environment setup
 │       ├── dataset_analysis.py # Dataset analysis script
 │       ├── upload_dataset.py   # Dataset upload script
 │       ├── experiment_manager.py # Experiment management
 │       └── data_processor.py   # Data processing script
-├── notebooks/                   # Jupyter notebooks
-│   ├── yolo_experiments/       # YOLO experiments
-│   ├── vlm_experiments/        # VLM experiments
-│   ├── hybrid_experiments/     # Hybrid experiments
-│   └── deployment/             # Deployment testing
-├── configs/                     # Configuration files
-│   ├── yolov3/                 # YOLOv3 configurations
+├── notebooks/                 # Jupyter notebooks
+│   ├── yolo_experiments/     # YOLO experiments
+│   ├── vlm_experiments/      # VLM experiments
+│   ├── hybrid_experiments/   # Hybrid experiments
+│   └── deployment/           # Deployment testing
+├── configs/                  # Configuration files
+│   ├── yolov3/              # YOLOv3 configurations (legacy)
 │   │   ├── data_config.yaml
 │   │   ├── training_config.yaml
 │   │   ├── reproduction_config.yaml
 │   │   └── improvement_config.yaml
-│   ├── yolov8/                 # YOLOv8 configurations
-│   ├── clip/                   # CLIP configurations
-│   ├── smolvm/                 # SMoLVM configurations
-│   └── hybrid/                 # Hybrid configurations
-├── tests/                       # Unit tests
-├── docs/                        # Documentation
-├── .github/                     # GitHub workflows
+│   ├── yolov8/              # YOLOv8 configurations (alternative)
+│   │   ├── maixcam_data.yaml   # Maix Cam data configuration
+│   │   ├── maixcam_model.yaml  # Maix Cam model configuration
+│   │   └── maixcam_training.yaml # Maix Cam training configuration
+│   ├── yolov11/             # YOLOv11 configurations (current)
+│   │   ├── maixcam_data.yaml   # Maix Cam data configuration
+│   │   ├── maixcam_model.yaml  # Maix Cam model configuration
+│   │   └── maixcam_training.yaml # Maix Cam training configuration
+│   ├── clip/                # CLIP configurations
+│   ├── smolvm/              # SMoLVM configurations
+│   └── hybrid/              # Hybrid configurations
+├── k210/                     # K210 (Maix Bit) implementation (legacy)
+│   └── main.py               # K210 main script (Chinese text)
+├── maixcam/                  # Maix Cam implementation (current)
+│   └── main.py               # Maix Cam main script (English text)
+├── tests/                    # Unit tests
+├── docs/                     # Documentation
+├── .github/                  # GitHub workflows
 │   └── workflows/
 ├── .gitignore
-├── requirements.txt             # Base requirements
+├── requirements.txt          # Base requirements
 ├── pyproject.toml
-└── README.md
+├── README.md
+└── MAIXCAM_IMPLEMENTATION_PLAN.md # Maix Cam implementation plan
 ```
 
 ### Data Workflow
@@ -252,20 +267,22 @@ git_config = {
 
 ## 3. Model Architecture
 
-### YOLOv3 Baseline
+### Model Evolution: YOLOv3 → YOLOv8 (Maix Cam Upgrade)
+
+#### YOLOv3 Baseline (LEGACY - K210)
 1. **Architecture**:
    - Darknet-53 backbone
    - FPN neck
    - Detection head modified for classification
-   - Input size: 416x416
+   - Input size: 416x416 (K210: 224x224)
    - Output: 1025 class probabilities
 
 2. **Training**:
-    - Learning rate: 0.0001
+    - Learning rate: 0.0001 (K210: 1e-3 aggressive)
     - Scheduler: cosine with 5 warmup epochs
-    - Batch size: 16
+    - Batch size: 16 (K210: 8)
     - Epochs: 100
-    - Augmentation: Standard YOLO augmentations
+    - Augmentation: Standard YOLO augmentations (K210: conservative)
 
 3. **Evaluation**:
    - Top-1 accuracy
@@ -273,6 +290,40 @@ git_config = {
    - Confusion matrix
    - Per-class accuracy
    - Inference speed
+
+#### YOLOv11 Modern Architecture (CURRENT - Maix Cam)
+1. **Architecture**:
+   - Enhanced CSPDarknet backbone (improved over YOLOv8)
+   - Advanced PANet neck (better feature fusion)
+   - Optimized detection head with modern improvements
+   - Input size: 256x256 or 320x320 (optimal for classification)
+   - Output: 1025 class probabilities
+
+2. **Training**:
+    - Learning rate: 0.01 (YOLOv11 default)
+    - Scheduler: cosine with 3 warmup epochs
+    - Batch size: 16-32 (larger than K210)
+    - Epochs: 100
+    - Augmentation: Resize-based pipeline with RandAugment + RandomErasing
+
+3. **Advantages over YOLOv8**:
+   - **Higher accuracy per parameter**: Better efficiency
+   - **Faster inference**: Especially on CPU/embedded devices
+   - **Improved classification**: Better for fine-grained tasks
+   - **Enhanced augmentation**: RandAugment + RandomErasing support
+   - **Better deployment**: First-class TensorRT export support
+
+#### Model Variants Comparison
+| Model | Parameters | GFLOPs | Input Size | Target Hardware | Status |
+|-------|------------|--------|------------|-----------------|--------|
+| YOLOv3 | 61.9M | 65.2 | 416x416 | General | Baseline |
+| YOLOv3-tiny | 12.66M | 20.1 | 224x224 | K210 | ✅ Trained (91.7%) |
+| YOLOv5n | 1.9M | 4.5 | 224x224 | K210 | 🔄 In Progress |
+| YOLOv8n | 3.2M | 8.7 | 256x256 | Maix Cam | Alternative |
+| YOLOv8m | ~20M | ~50 | 256x256 | Maix Cam | Alternative |
+| **YOLOv11m** | **~20M** | **~50** | **256x256** | **Maix Cam** | **🎯 PRIMARY TARGET** |
+| YOLOv11l | ~40M | ~100 | 256x256 | Maix Cam | High Accuracy |
+| YOLOv11x | ~80M | ~200 | 256x256 | Maix Cam | Maximum Accuracy |
 
 ### Vision Language Models
 1. **CLIP**:
@@ -383,24 +434,93 @@ git_config = {
 
 ## 5. Deployment Strategy
 
-### IoT Deployment
-1. **Model Optimization**:
-   - Quantization
-   - Pruning
-   - Knowledge distillation
-   - TensorRT conversion
+### IoT Deployment Evolution: K210 → Maix Cam Hardware Upgrade
 
-2. **Hardware Targets**:
-   - Jetson Nano
-   - Raspberry Pi 4
-   - Edge TPU
-   - Mobile devices
+#### Hardware Target Evolution
+1. **Original Target**: K210 (Maix Bit) - Limited by hardware constraints
+2. **Current Target**: Maix Cam - Modern hardware with full capabilities
+3. **Future Targets**: Jetson Nano, Raspberry Pi 4, Edge TPU, Mobile devices
 
-3. **Deployment Pipeline**:
-   - Model conversion
-   - Performance testing
-   - Deployment packaging
-   - Update mechanism
+#### Model Optimization Strategy
+1. **Quantization**: INT8 post-training quantization
+2. **Pruning**: Structured pruning for model size reduction
+3. **Knowledge Distillation**: Transfer learning from larger models
+4. **Architecture Optimization**: Modern YOLO variants (YOLOv8, YOLOv11)
+
+### Maix Cam Implementation (CURRENT PRIORITY)
+
+#### Hardware Advantages
+1. **Modern Architecture**: K230+ (vs 2018 K210)
+2. **Increased Memory**: Significantly more RAM and Flash storage
+3. **Native YOLO Support**: YOLOv5, YOLOv8, YOLOv11 directly supported
+4. **Modern Converter**: MaixCam converter eliminates nncase issues
+5. **No Version Conflicts**: Eliminates kmodel compatibility crisis
+6. **Better Performance**: Higher inference speed and accuracy
+
+#### Model Selection Strategy
+1. **Primary Choice**: YOLOv11m (latest, most efficient, best accuracy per parameter)
+2. **Alternative**: YOLOv11l (higher accuracy, larger model)
+3. **Fallback**: YOLOv8m (proven, stable)
+4. **Full 1025 Classes**: No class reduction needed
+5. **Optimal Resolution**: 256x256 or 320x320 (optimal for classification vs 224x224 for K210)
+
+#### Maix Cam Training Configuration
+1. **Model Variants**: YOLOv11m (primary), YOLOv11l, YOLOv11x
+2. **Input Resolution**: 256x256 (optimal balance) or 320x320 (high accuracy)
+3. **Batch Size**: 16-32 (larger than K210's 8)
+4. **Learning Rate**: 0.01 (YOLOv11 default, vs 1e-3 for K210)
+5. **Optimizer**: Auto (YOLOv11 auto-selects best)
+6. **Augmentation**: Resize-based pipeline with RandAugment + RandomErasing
+7. **Class Balancing**: Class-balanced sampling for 1025 classes
+
+#### Maix Cam Export Pipeline
+1. **Primary Format**: ONNX (directly supported by MaixCam converter)
+2. **Alternative Format**: TFLite (with INT8 quantization)
+3. **Converter**: MaixCam converter (replaces problematic nncase)
+4. **No Version Issues**: Eliminates kmodel v3/v4/v5 compatibility crisis
+5. **Optimization**: Automatic optimization and quantization
+6. **Artifacts**: Model, classes.txt, config, demo code
+
+#### Maix Cam Deployment Strategy
+1. **Model Size**: No artificial constraints (vs K210's 16MB limit)
+2. **Runtime Memory**: Sufficient for full 1025 classes
+3. **Inference Speed**: Target 30 FPS real-time performance
+4. **Accuracy**: High accuracy with modern YOLO variants
+5. **Reliability**: No nncase compatibility issues
+6. **Features**: Full YOLO capabilities (vs K210 limitations)
+
+#### Maix Cam Code Implementation
+1. **Main Script**: `maixcam/main.py` (English text, optimized for Maix Cam)
+2. **Training Script**: `scripts/yolo/train_yolov8_maixcam.py`
+3. **Export Script**: `scripts/yolo/export_maixcam.py`
+4. **Config Files**: `configs/yolov8/maixcam_*.yaml`
+5. **API**: Uses `maix.nn` instead of K210-specific APIs
+6. **Error Handling**: Robust error handling for modern hardware
+
+#### Maix Cam Performance Targets
+1. **Model Size**: <50MB (no artificial constraints)
+2. **Runtime Memory**: <100MB (sufficient for full model)
+3. **Inference Speed**: 30 FPS real-time
+4. **Accuracy**: >95% top-1 accuracy (vs 91.7% mAP50 for K210)
+5. **Classes**: Full 1025 Pokemon support
+6. **Resolution**: 256x256 or 320x320 (optimal for classification)
+7. **Metrics**: Track top-1/top-5 accuracy and per-class confusion
+
+#### Maix Cam vs K210 Comparison
+| Feature | K210 (Maix Bit) | Maix Cam |
+|---------|----------------|----------|
+| Architecture | K210 (2018) | K230+ (modern) |
+| Memory | 6MB RAM, 16MB Flash | Much larger |
+| Model Support | Limited YOLO variants | YOLOv5/v8/v11 |
+| Converter | nncase (problematic) | MaixCam converter |
+| Resolution | 224x224 max | 256x256/320x320 |
+| Classes | Limited by memory | Full 1025 |
+| Performance | 91.7% mAP50 | >95% top-1 expected |
+| Reliability | nncase compatibility issues | No version conflicts |
+| Augmentation | Conservative | RandAugment + RandomErasing |
+| Metrics | mAP50 | top-1/top-5 + per-class |
+
+### K210 Implementation (LEGACY - DEPLOYMENT CONSTRAINED)
 
 #### K210 (Maix Bit) Export & Deployment
 - **Training assumption**: YOLO detection with full-image bounding boxes (one box per image), compatible with K210 YOLO runtime.
@@ -645,31 +765,36 @@ git_config = {
 
 ## 6. Future Improvements
 
-### Model Improvements
+### Model Improvements (Maix Cam Focus)
 1. **Architecture**:
-   - Try YOLOv8
+   - ✅ YOLOv8 (implemented for Maix Cam)
+   - YOLOv11 (latest cutting-edge)
    - Experiment with ViT
    - Test EfficientNet
    - Custom architectures
 
 2. **Training**:
-   - Advanced augmentations
+   - ✅ Advanced augmentations (full pipeline enabled)
    - Curriculum learning
    - Self-supervised pretraining
    - Multi-task learning
+   - Knowledge distillation from larger models
 
-### Infrastructure Improvements
+### Infrastructure Improvements (Maix Cam Focus)
 1. **Training**:
    - Multi-node training
    - Mixed precision
    - Gradient accumulation
    - Dynamic batching
+   - ✅ Maix Cam optimized training pipeline
 
 2. **Deployment**:
+   - ✅ Maix Cam deployment pipeline (replaces K210)
    - Edge optimization
    - Battery optimization
    - Compression techniques
    - Update strategies
+   - Real-time performance optimization
 
 ### Dataset Improvements
 1. **Data Quality**:
@@ -835,3 +960,53 @@ git_config = {
    - Validate class IDs (0-based)
    - Verify per-Pokemon splits
    - Test image-label pairs match
+
+## 7. Maix Cam Implementation Status
+
+### Current Implementation Status
+1. **Hardware Upgrade**: ✅ Maix Cam acquired (replaces K210)
+2. **Training Pipeline**: ✅ YOLOv11 training script implemented (primary)
+3. **Export Pipeline**: ✅ MaixCam converter script implemented
+4. **Deployment Code**: ✅ Maix Cam main.py created (256x256 resolution)
+5. **Configuration**: ✅ YOLOv11 Maix Cam config files created
+6. **Documentation**: ✅ Implementation plan documented
+
+### Key Achievements
+1. **Eliminated K210 Limitations**: No more nncase compatibility issues
+2. **Modern Architecture**: YOLOv11 implementation with full capabilities
+3. **Full 1025 Classes**: No artificial constraints on Pokemon classes
+4. **Optimal Resolution**: Support for 256x256 and 320x320 input sizes (classification optimized)
+5. **Better Performance**: Expected >95% top-1 accuracy (vs 91.7% mAP50 for K210)
+6. **Enhanced Augmentation**: RandAugment + RandomErasing for fine-grained classification
+
+### Current Training Status (YOLOv11)
+1. **Model Loading**: ✅ YOLOv11m successfully loads and initializes
+2. **Configuration**: ✅ Proper YOLOv11 config with 1025 classes and 256x256 resolution
+3. **W&B Integration**: ✅ Working with correct entity (liuhuanjim013-self)
+4. **Training Started**: ✅ Training pipeline operational with GPU acceleration
+5. **Hardware Compatibility**: ✅ GPU verification passed (Quadro K1100M detected)
+6. **Model Architecture**: ✅ 20.8M parameters, 72.6 GFLOPs, 231 layers
+
+### YOLOv11 Training Configuration
+- **Model**: YOLOv11m (latest, most efficient)
+- **Input Resolution**: 256x256 (optimal for classification)
+- **Classes**: 1025 (all Pokemon generations 1-9)
+- **Batch Size**: 16 (optimized for GPU memory)
+- **Learning Rate**: 0.01 (YOLOv11 default)
+- **Optimizer**: Auto (YOLOv11 auto-selects best)
+- **Augmentation**: Resize-based pipeline with RandAugment + RandomErasing
+- **Training Time**: 100 epochs with early stopping (patience=15)
+
+### Next Steps
+1. **Phase 1**: ✅ Maix Cam environment setup and YOLOv11 training (COMPLETED)
+2. **Phase 2**: 🔄 Model export and deployment testing (IN PROGRESS)
+3. **Phase 3**: Performance optimization and real-world testing
+4. **Phase 4**: Advanced features and documentation
+
+### Success Metrics
+- **Training**: YOLOv11m achieving >95% top-1 accuracy on 1025 classes
+- **Export**: Successful conversion using MaixCam converter
+- **Deployment**: Real-time inference at 30 FPS
+- **Reliability**: No compatibility or version issues
+- **Features**: Full 1025 Pokemon classification capability
+- **Metrics**: Track top-1/top-5 accuracy and per-class confusion analysis

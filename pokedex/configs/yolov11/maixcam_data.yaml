@@ -1,0 +1,1217 @@
+# Maix Cam YOLOv11 Configuration
+# Optimized for modern hardware with full 1025 Pokemon classes
+# Based on latest YOLOv11 recommendations for classification tasks
+
+# Model configuration (YOLOTrainer expects this structure)
+model:
+  name: "yolo11m"  # YOLOv11 medium model
+  weights: "yolo11m"  # Use model name (Ultralytics will download)
+  classes: 1025  # All Pokemon generations 1-9
+  img_size: 256  # Optimal resolution for classification
+  pretrained: true
+
+# Training configuration
+training:
+  epochs: 100
+  batch_size: 16
+  learning_rate: 0.01  # YOLOv11 default learning rate
+  optimizer: "auto"  # YOLOv11 auto-selects best optimizer
+  momentum: 0.937  # SGD momentum
+  weight_decay: 0.001  # Weight decay for regularization
+  scheduler: "cosine"
+  warmup_epochs: 3
+  
+  # YOLOv11 Classification-specific augmentations
+  augmentation:
+    # Resize-based pipeline (avoid aggressive random crops)
+    resize: true  # Use resize instead of random crops
+    randaugment: true  # RandAugment for fine-grained classification
+    random_erasing: 0.1  # RandomErasing for robustness
+    hsv_h: 0.015  # HSV hue augmentation
+    hsv_s: 0.7    # HSV saturation augmentation  
+    hsv_v: 0.4    # HSV value augmentation
+    degrees: 15.0  # Rotation augmentation
+    translate: 0.2  # Translation augmentation
+    scale: 0.5     # Scale augmentation
+    shear: 2.0     # Shear augmentation
+    perspective: 0.001  # Perspective augmentation
+    flipud: 0.5    # Vertical flip
+    fliplr: 0.5    # Horizontal flip
+    # Disable detection-specific augmentations for classification
+    mosaic: 0.0    # Disabled for classification
+    mixup: 0.0     # Disabled for classification
+  
+  # Early stopping
+  early_stopping:
+    patience: 15
+    min_delta: 0.001
+    monitor: "val_loss"
+
+# Data configuration
+data:
+  dataset: "liuhuanjim013/pokemon-yolo-1025"  # Use existing dataset
+  train_split: 0.7
+  val_split: 0.15
+  test_split: 0.15
+  path: data/yolo_dataset  # Local dataset path (relative)
+  train: images/train  # Training images
+  val: images/validation  # Validation images
+  test: images/test  # Test images
+  nc: 1025  # Number of classes (all Pokemon generations 1-9)
+  names:  # Complete list of all 1025 Pokemon names
+    - bulbasaur
+    - ivysaur
+    - venusaur
+    - charmander
+    - charmeleon
+    - charizard
+    - squirtle
+    - wartortle
+    - blastoise
+    - caterpie
+    - metapod
+    - butterfree
+    - weedle
+    - kakuna
+    - beedrill
+    - pidgey
+    - pidgeotto
+    - pidgeot
+    - rattata
+    - raticate
+    - spearow
+    - fearow
+    - ekans
+    - arbok
+    - pikachu
+    - raichu
+    - sandshrew
+    - sandslash
+    - nidoran-f
+    - nidorina
+    - nidoqueen
+    - nidoran-m
+    - nidorino
+    - nidoking
+    - clefairy
+    - clefable
+    - vulpix
+    - ninetales
+    - jigglypuff
+    - wigglytuff
+    - zubat
+    - golbat
+    - oddish
+    - gloom
+    - vileplume
+    - paras
+    - parasect
+    - venonat
+    - venomoth
+    - diglett
+    - dugtrio
+    - meowth
+    - persian
+    - psyduck
+    - golduck
+    - mankey
+    - primeape
+    - growlithe
+    - arcanine
+    - poliwag
+    - poliwhirl
+    - poliwrath
+    - abra
+    - kadabra
+    - alakazam
+    - machop
+    - machoke
+    - machamp
+    - bellsprout
+    - weepinbell
+    - victreebel
+    - tentacool
+    - tentacruel
+    - geodude
+    - graveler
+    - golem
+    - ponyta
+    - rapidash
+    - slowpoke
+    - slowbro
+    - magnemite
+    - magneton
+    - farfetchd
+    - doduo
+    - dodrio
+    - seel
+    - dewgong
+    - grimer
+    - muk
+    - shellder
+    - cloyster
+    - gastly
+    - haunter
+    - gengar
+    - onix
+    - drowzee
+    - hypno
+    - krabby
+    - kingler
+    - voltorb
+    - electrode
+    - exeggcute
+    - exeggutor
+    - cubone
+    - marowak
+    - hitmonlee
+    - hitmonchan
+    - lickitung
+    - koffing
+    - weezing
+    - rhyhorn
+    - rhydon
+    - chansey
+    - tangela
+    - kangaskhan
+    - horsea
+    - seadra
+    - goldeen
+    - seaking
+    - staryu
+    - starmie
+    - mr-mime
+    - scyther
+    - jynx
+    - electabuzz
+    - magmar
+    - pinsir
+    - tauros
+    - magikarp
+    - gyarados
+    - lapras
+    - ditto
+    - eevee
+    - vaporeon
+    - jolteon
+    - flareon
+    - porygon
+    - omanyte
+    - omastar
+    - kabuto
+    - kabutops
+    - aerodactyl
+    - snorlax
+    - articuno
+    - zapdos
+    - moltres
+    - dratini
+    - dragonair
+    - dragonite
+    - mewtwo
+    - mew
+    - chikorita
+    - bayleef
+    - meganium
+    - cyndaquil
+    - quilava
+    - typhlosion
+    - totodile
+    - croconaw
+    - feraligatr
+    - sentret
+    - furret
+    - hoothoot
+    - noctowl
+    - ledyba
+    - ledian
+    - spinarak
+    - ariados
+    - crobat
+    - chinchou
+    - lanturn
+    - pichu
+    - cleffa
+    - igglybuff
+    - togepi
+    - togetic
+    - natu
+    - xatu
+    - mareep
+    - flaaffy
+    - ampharos
+    - bellossom
+    - marill
+    - azumarill
+    - sudowoodo
+    - politoed
+    - hoppip
+    - skiploom
+    - jumpluff
+    - aipom
+    - sunkern
+    - sunflora
+    - yanma
+    - wooper
+    - quagsire
+    - espeon
+    - umbreon
+    - murkrow
+    - slowking
+    - misdreavus
+    - unown
+    - wobbuffet
+    - girafarig
+    - pineco
+    - forretress
+    - dunsparce
+    - gligar
+    - steelix
+    - snubbull
+    - granbull
+    - qwilfish
+    - scizor
+    - shuckle
+    - heracross
+    - sneasel
+    - teddiursa
+    - ursaring
+    - slugma
+    - magcargo
+    - swinub
+    - piloswine
+    - corsola
+    - remoraid
+    - octillery
+    - delibird
+    - mantine
+    - skarmory
+    - houndour
+    - houndoom
+    - kingdra
+    - phanpy
+    - donphan
+    - porygon2
+    - stantler
+    - smeargle
+    - tyrogue
+    - hitmontop
+    - smoochum
+    - elekid
+    - magby
+    - miltank
+    - blissey
+    - raikou
+    - entei
+    - suicune
+    - larvitar
+    - pupitar
+    - tyranitar
+    - lugia
+    - ho-oh
+    - celebi
+    - treecko
+    - grovyle
+    - sceptile
+    - torchic
+    - combusken
+    - blaziken
+    - mudkip
+    - marshtomp
+    - swampert
+    - poochyena
+    - mightyena
+    - zigzagoon
+    - linoone
+    - wurmple
+    - silcoon
+    - beautifly
+    - cascoon
+    - dustox
+    - lotad
+    - lombre
+    - ludicolo
+    - seedot
+    - nuzleaf
+    - shiftry
+    - taillow
+    - swellow
+    - wingull
+    - pelipper
+    - ralts
+    - kirlia
+    - gardevoir
+    - surskit
+    - masquerain
+    - shroomish
+    - breloom
+    - slakoth
+    - vigoroth
+    - slaking
+    - nincada
+    - ninjask
+    - shedinja
+    - whismur
+    - loudred
+    - exploud
+    - makuhita
+    - hariyama
+    - azurill
+    - nosepass
+    - skitty
+    - delcatty
+    - sableye
+    - mawile
+    - aron
+    - lairon
+    - aggron
+    - meditite
+    - medicham
+    - electrike
+    - manectric
+    - plusle
+    - minun
+    - volbeat
+    - illumise
+    - roselia
+    - gulpin
+    - swalot
+    - carvanha
+    - sharpedo
+    - wailmer
+    - wailord
+    - numel
+    - camerupt
+    - torkoal
+    - spoink
+    - grumpig
+    - spinda
+    - trapinch
+    - vibrava
+    - flygon
+    - cacnea
+    - cacturne
+    - swablu
+    - altaria
+    - zangoose
+    - seviper
+    - lunatone
+    - solrock
+    - barboach
+    - whiscash
+    - corphish
+    - crawdaunt
+    - baltoy
+    - claydol
+    - lileep
+    - cradily
+    - anorith
+    - armaldo
+    - feebas
+    - milotic
+    - castform
+    - kecleon
+    - shuppet
+    - banette
+    - duskull
+    - dusclops
+    - tropius
+    - chimecho
+    - absol
+    - wynaut
+    - snorunt
+    - glalie
+    - spheal
+    - sealeo
+    - walrein
+    - clamperl
+    - huntail
+    - gorebyss
+    - relicanth
+    - luvdisc
+    - bagon
+    - shelgon
+    - salamence
+    - beldum
+    - metang
+    - metagross
+    - regirock
+    - regice
+    - registeel
+    - latias
+    - latios
+    - kyogre
+    - groudon
+    - rayquaza
+    - jirachi
+    - deoxys
+    - turtwig
+    - grotle
+    - torterra
+    - chimchar
+    - monferno
+    - infernape
+    - piplup
+    - prinplup
+    - empoleon
+    - starly
+    - staravia
+    - staraptor
+    - bidoof
+    - bibarel
+    - kricketot
+    - kricketune
+    - shinx
+    - luxio
+    - luxray
+    - budew
+    - roserade
+    - cranidos
+    - rampardos
+    - shieldon
+    - bastiodon
+    - burmy
+    - wormadam
+    - mothim
+    - combee
+    - vespiquen
+    - pachirisu
+    - buizel
+    - floatzel
+    - cherubi
+    - cherrim
+    - shellos
+    - gastrodon
+    - ambipom
+    - drifloon
+    - drifblim
+    - buneary
+    - lopunny
+    - mismagius
+    - honchkrow
+    - glameow
+    - purugly
+    - chingling
+    - stunky
+    - skuntank
+    - bronzor
+    - bronzong
+    - bonsly
+    - mime-jr
+    - happiny
+    - chatot
+    - spiritomb
+    - gible
+    - gabite
+    - garchomp
+    - munchlax
+    - riolu
+    - lucario
+    - hippopotas
+    - hippowdon
+    - skorupi
+    - drapion
+    - croagunk
+    - toxicroak
+    - carnivine
+    - finneon
+    - lumineon
+    - mantyke
+    - snover
+    - abomasnow
+    - weavile
+    - magnezone
+    - lickilicky
+    - rhyperior
+    - tangrowth
+    - electivire
+    - magmortar
+    - togekiss
+    - yanmega
+    - leafeon
+    - glaceon
+    - gliscor
+    - mamoswine
+    - porygon-z
+    - gallade
+    - probopass
+    - dusknoir
+    - froslass
+    - rotom
+    - uxie
+    - mesprit
+    - azelf
+    - dialga
+    - palkia
+    - heatran
+    - regigigas
+    - giratina
+    - cresselia
+    - phione
+    - manaphy
+    - darkrai
+    - shaymin
+    - arceus
+    - victini
+    - snivy
+    - servine
+    - serperior
+    - tepig
+    - pignite
+    - emboar
+    - oshawott
+    - dewott
+    - samurott
+    - patrat
+    - watchog
+    - lillipup
+    - herdier
+    - stoutland
+    - purrloin
+    - liepard
+    - pansage
+    - simisage
+    - pansear
+    - simisear
+    - panpour
+    - simipour
+    - munna
+    - musharna
+    - pidove
+    - tranquill
+    - unfezant
+    - blitzle
+    - zebstrika
+    - roggenrola
+    - boldore
+    - gigalith
+    - woobat
+    - swoobat
+    - drilbur
+    - excadrill
+    - audino
+    - timburr
+    - gurdurr
+    - conkeldurr
+    - tympole
+    - palpitoad
+    - seismitoad
+    - throh
+    - sawk
+    - sewaddle
+    - swadloon
+    - leavanny
+    - venipede
+    - whirlipede
+    - scolipede
+    - cottonee
+    - whimsicott
+    - petilil
+    - lilligant
+    - basculin
+    - sandile
+    - krokorok
+    - krookodile
+    - darumaka
+    - darmanitan
+    - maractus
+    - dwebble
+    - crustle
+    - scraggy
+    - scrafty
+    - sigilyph
+    - yamask
+    - cofagrigus
+    - tirtouga
+    - carracosta
+    - archen
+    - archeops
+    - trubbish
+    - garbodor
+    - zorua
+    - zoroark
+    - minccino
+    - cinccino
+    - gothita
+    - gothorita
+    - gothitelle
+    - solosis
+    - duosion
+    - reuniclus
+    - ducklett
+    - swanna
+    - vanillite
+    - vanillish
+    - vanilluxe
+    - deerling
+    - sawsbuck
+    - emolga
+    - karrablast
+    - escavalier
+    - foongus
+    - amoonguss
+    - frillish
+    - jellicent
+    - alomomola
+    - joltik
+    - galvantula
+    - ferroseed
+    - ferrothorn
+    - klink
+    - klang
+    - klinklang
+    - tynamo
+    - eelektrik
+    - eelektross
+    - elgyem
+    - beheeyem
+    - litwick
+    - lampent
+    - chandelure
+    - axew
+    - fraxure
+    - haxorus
+    - cubchoo
+    - beartic
+    - cryogonal
+    - shelmet
+    - accelgor
+    - stunfisk
+    - mienfoo
+    - mienshao
+    - druddigon
+    - golett
+    - golurk
+    - pawniard
+    - bisharp
+    - bouffalant
+    - rufflet
+    - braviary
+    - vullaby
+    - mandibuzz
+    - heatmor
+    - durant
+    - deino
+    - zweilous
+    - hydreigon
+    - larvesta
+    - volcarona
+    - cobalion
+    - terrakion
+    - virizion
+    - tornadus
+    - thundurus
+    - reshiram
+    - zekrom
+    - landorus
+    - kyurem
+    - keldeo
+    - meloetta
+    - genesect
+    - chespin
+    - quilladin
+    - chesnaught
+    - fennekin
+    - braixen
+    - delphox
+    - froakie
+    - frogadier
+    - greninja
+    - bunnelby
+    - diggersby
+    - fletchling
+    - fletchinder
+    - talonflame
+    - scatterbug
+    - spewpa
+    - vivillon
+    - litleo
+    - pyroar
+    - flabebe
+    - floette
+    - florges
+    - skiddo
+    - gogoat
+    - pancham
+    - pangoro
+    - furfrou
+    - espurr
+    - meowstic
+    - honedge
+    - doublade
+    - aegislash
+    - spritzee
+    - aromatisse
+    - swirlix
+    - slurpuff
+    - inkay
+    - malamar
+    - binacle
+    - barbaracle
+    - skrelp
+    - dragalge
+    - clauncher
+    - clawitzer
+    - helioptile
+    - heliolisk
+    - tyrunt
+    - tyrantrum
+    - amaura
+    - aurorus
+    - sylveon
+    - hawlucha
+    - dedenne
+    - carbink
+    - goomy
+    - sliggoo
+    - goodra
+    - klefki
+    - phantump
+    - trevenant
+    - pumpkaboo
+    - gourgeist
+    - bergmite
+    - avalugg
+    - noibat
+    - noivern
+    - xerneas
+    - yveltal
+    - zygarde
+    - diancie
+    - hoopa
+    - volcanion
+    - rowlet
+    - dartrix
+    - decidueye
+    - litten
+    - torracat
+    - incineroar
+    - popplio
+    - brionne
+    - primarina
+    - pikipek
+    - trumbeak
+    - toucannon
+    - yungoos
+    - gumshoos
+    - grubbin
+    - charjabug
+    - vikavolt
+    - crabrawler
+    - crabominable
+    - oricorio
+    - cutiefly
+    - ribombee
+    - rockruff
+    - lycanroc
+    - wishiwashi
+    - mareanie
+    - toxapex
+    - mudbray
+    - mudsdale
+    - dewpider
+    - araquanid
+    - fomantis
+    - lurantis
+    - morelull
+    - shiinotic
+    - salandit
+    - salazzle
+    - stufful
+    - bewear
+    - bounsweet
+    - steenee
+    - tsareena
+    - comfey
+    - oranguru
+    - passimian
+    - wimpod
+    - golisopod
+    - sandygast
+    - palossand
+    - pyukumuku
+    - type-null
+    - silvally
+    - minior
+    - komala
+    - turtonator
+    - togedemaru
+    - mimikyu
+    - bruxish
+    - drampa
+    - dhelmise
+    - jangmo-o
+    - hakamo-o
+    - kommo-o
+    - tapu-koko
+    - tapu-lele
+    - tapu-bulu
+    - tapu-fini
+    - cosmog
+    - cosmoem
+    - solgaleo
+    - lunala
+    - nihilego
+    - buzzwole
+    - pheromosa
+    - xurkitree
+    - celesteela
+    - kartana
+    - guzzlord
+    - necrozma
+    - magearna
+    - marshadow
+    - poipole
+    - naganadel
+    - stakataka
+    - blacephalon
+    - zeraora
+    - meltan
+    - melmetal
+    - grookey
+    - thwackey
+    - rillaboom
+    - scorbunny
+    - raboot
+    - cinderace
+    - sobble
+    - drizzile
+    - inteleon
+    - skwovet
+    - greedent
+    - rookidee
+    - corvisquire
+    - corviknight
+    - blipbug
+    - dottler
+    - orbeetle
+    - nickit
+    - thievul
+    - gossifleur
+    - eldegoss
+    - wooloo
+    - dubwool
+    - chewtle
+    - drednaw
+    - yamper
+    - boltund
+    - rolycoly
+    - carkol
+    - coalossal
+    - applin
+    - flapple
+    - appletun
+    - silicobra
+    - sandaconda
+    - cramorant
+    - arrokuda
+    - barraskewda
+    - toxel
+    - toxtricity
+    - sizzlipede
+    - centiskorch
+    - clobbopus
+    - grapploct
+    - sinistea
+    - polteageist
+    - hatenna
+    - hattrem
+    - hatterene
+    - impidimp
+    - morgrem
+    - grimmsnarl
+    - obstagoon
+    - perrserker
+    - cursola
+    - sirfetchd
+    - mr-rime
+    - runerigus
+    - milcery
+    - alcremie
+    - falinks
+    - pincurchin
+    - snom
+    - frosmoth
+    - stonjourner
+    - eiscue
+    - indeedee
+    - morpeko
+    - cufant
+    - copperajah
+    - dracozolt
+    - arctozolt
+    - dracovish
+    - arctovish
+    - duraludon
+    - dreepy
+    - drakloak
+    - dragapult
+    - zacian
+    - zamazenta
+    - eternatus
+    - kubfu
+    - urshifu
+    - zarude
+    - regieleki
+    - regidrago
+    - glastrier
+    - spectrier
+    - calyrex
+    - unknown-pokemon-0899
+    - unknown-pokemon-0900
+    - unknown-pokemon-0901
+    - unknown-pokemon-0902
+    - unknown-pokemon-0903
+    - unknown-pokemon-0904
+    - unknown-pokemon-0905
+    - sprigatito
+    - floragato
+    - meowscarada
+    - fuecoco
+    - crocalor
+    - skeledirge
+    - quaxly
+    - quaxwell
+    - quaquaval
+    - lechonk
+    - oinkologne
+    - tarountula
+    - spidops
+    - nymble
+    - lokix
+    - pawmi
+    - pawmo
+    - pawmot
+    - tandemaus
+    - maushold
+    - fidough
+    - dachsbun
+    - smoliv
+    - dolliv
+    - arboliva
+    - squawkabilly
+    - nacli
+    - naclstack
+    - garganacl
+    - charcadet
+    - armarouge
+    - ceruledge
+    - tadbulb
+    - bellibolt
+    - wattrel
+    - kilowattrel
+    - maschiff
+    - mabosstiff
+    - shroodle
+    - grafaiai
+    - bramblin
+    - brambleghast
+    - toedscool
+    - toedscruel
+    - klawf
+    - capsakid
+    - scovillain
+    - rellor
+    - rabsca
+    - flittle
+    - espathra
+    - tinkatink
+    - tinkatuff
+    - tinkaton
+    - wiglett
+    - wugtrio
+    - bombirdier
+    - finizen
+    - palafin
+    - varoom
+    - revavroom
+    - cyclizar
+    - orthworm
+    - glimmet
+    - glimmora
+    - greavard
+    - houndstone
+    - flamigo
+    - cetoddle
+    - cetitan
+    - veluza
+    - dondozo
+    - tatsugiri
+    - annihilape
+    - clodsire
+    - farigiraf
+    - dudunsparce
+    - kingambit
+    - great-tusk
+    - scream-tail
+    - brute-bonnet
+    - flutter-mane
+    - slither-wing
+    - sandy-shocks
+    - iron-treads
+    - iron-bundle
+    - iron-hands
+    - iron-jugulis
+    - iron-moth
+    - iron-thorns
+    - frigibax
+    - arctibax
+    - baxcalibur
+    - gimmighoul
+    - gholdengo
+    - wo-chien
+    - chien-pao
+    - ting-lu
+    - chi-yu
+    - roaring-moon
+    - iron-valiant
+    - koraidon
+    - miraidon
+    - walking-wake
+    - iron-leaves
+    - dipplin
+    - poltchageist
+    - sinistcha
+    - okidogi
+    - munkidori
+    - fezandipiti
+    - ogerpon
+    - archaludon
+    - hydrapple
+    - gouging-fire
+    - raging-bolt
+    - iron-boulder
+    - iron-crown
+    - terapagos
+    - pecharunt
+
+# Maix Cam specific optimizations for YOLOv11
+maixcam_optimizations:
+  # Optimal resolution for classification (vs detection)
+  max_resolution: 320  # Can handle higher resolutions
+  target_resolution: 256  # Optimal balance for classification
+  
+  # Full dataset utilization (no artificial constraints)
+  use_all_classes: true  # All 1025 Pokemon supported
+  no_class_reduction: true  # No need to reduce classes
+  
+  # Memory optimizations
+  batch_size_optimization: true  # Can use larger batches
+  memory_efficient_loading: true  # Optimized data loading
+  
+  # Performance targets
+  target_fps: 30  # Real-time performance target
+  target_accuracy: 0.95  # High accuracy target (>95% top-1)
+  target_model_size: "50MB"  # No artificial size constraints
+
+
+
+# W&B configuration (YOLOTrainer expects this structure)
+wandb:
+  project: "pokemon-classifier-maixcam"
+  name: "yolo11m-maixcam-classification"
+  entity: "liuhuanjim013-self"  # Use correct entity
+  tags: ["yolo11m", "maixcam", "1025-classes", "classification", "modern"]
+  settings:
+    save_code: false  # Don't save code
+    disable_git: true  # Don't track git
+
+# Checkpoint configuration
+checkpoint:
+  save_frequency: 10
+  save_dir: "models/checkpoints/maixcam"
+  max_checkpoints: 50
+
+# YOLOv11 Validation configuration
+validation:
+  # Validation settings
+  val: true  # Enable validation
+  save_period: 10  # Save every 10 epochs
+  
+  # Classification metrics
+  metrics: ['top1', 'top5']  # Track top-1 and top-5 accuracy
+  per_class_metrics: true  # Track per-class confusion
+  
+  # Maix Cam specific validation
+  maixcam_validation: true  # Maix Cam specific validation
+  real_time_validation: true  # Real-time validation metrics
+
+# Export configuration for Maix Cam
+export:
+  # Maix Cam converter settings
+  maixcam_converter: true  # Use Maix Cam converter
+  format: "maixcam"  # Export format for Maix Cam
+  
+  # Model optimization
+  optimize: true  # Enable model optimization
+  quantize: true  # Enable quantization
+  fuse: true  # Enable layer fusion
+  
+  # Export artifacts
+  include_classes: true  # Include class names
+  include_metadata: true  # Include model metadata
+  
+  # Maix Cam specific exports
+  maixcam_model: true  # Generate Maix Cam model
+  maixcam_config: true  # Generate Maix Cam config
+  maixcam_demo: true  # Generate Maix Cam demo code
+
+# Performance monitoring
+monitoring:
+  # Training monitoring
+  log_interval: 100  # Log every 100 batches
+  save_interval: 10  # Save every 10 epochs
+  
+  # YOLOv11 specific monitoring
+  top1_accuracy: true  # Monitor top-1 accuracy
+  top5_accuracy: true  # Monitor top-5 accuracy
+  per_class_confusion: true  # Monitor per-class confusion
+  
+  # Maix Cam specific monitoring
+  maixcam_metrics: true  # Maix Cam specific metrics
+  hardware_utilization: true  # Monitor hardware utilization
+  memory_usage: true  # Monitor memory usage
+  inference_speed: true  # Monitor inference speed
+  
+  # W&B integration
+  wandb_project: "pokemon-classifier-maixcam"
+  wandb_entity: "liuhuanjim013-self"
+  wandb_log_model: true  # Log models to W&B
+  wandb_log_artifacts: true  # Log artifacts to W&B
+
+# Hardware compatibility
+hardware:
+  target: "maixcam"  # Target hardware
+  architecture: "modern"  # Modern architecture
+  memory: "sufficient"  # Sufficient memory
+  storage: "sufficient"  # Sufficient storage
+  
+  # Maix Cam capabilities
+  max_resolution: 320  # Maximum supported resolution
+  max_classes: 1025  # Maximum supported classes
+  max_model_size: "100MB"  # Maximum model size
+  inference_speed: "30fps"  # Target inference speed
+  
+  # YOLOv11 compatibility flags
+  yolo_v11_support: true  # YOLOv11 support
+  classification_optimized: true  # Classification optimization
+  modern_converter: true  # Modern converter support
+  no_nncase_limitations: true  # No nncase limitations
+
+# YOLOv11 specific features
+yolov11_features:
+  # Enhanced architecture
+  enhanced_backbone: true  # Enhanced CSPDarknet backbone
+  improved_neck: true  # Advanced PANet neck
+  optimized_head: true  # Optimized detection head
+  
+  # Classification optimizations
+  resize_based_pipeline: true  # Resize-based pipeline
+  randaugment_support: true  # RandAugment support
+  random_erasing: true  # RandomErasing support
+  class_balanced_sampling: true  # Class-balanced sampling
+  
+  # Performance improvements
+  faster_inference: true  # Faster inference
+  better_accuracy_per_param: true  # Better accuracy per parameter
+  tensorrt_optimized: true  # TensorRT optimization

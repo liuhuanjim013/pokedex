@@ -51,7 +51,7 @@ class YOLOTrainer:
         return config
     
     def _setup_model(self):
-        """Initialize YOLOv3 model."""
+        """Initialize YOLO model (supports YOLOv3, YOLOv5, YOLOv8, YOLOv11)."""
         model_name = self.config['model']['name']
         model_weights = self.config['model']['weights']
         classes = self.config['model']['classes']
@@ -70,46 +70,25 @@ class YOLOTrainer:
             # Initialize model with pretrained weights
             logger.info(f"Initializing {model_name} model...")
             
-            # Try loading official YOLOv3 weights directly
+            # Try loading the model directly (works for YOLOv11, YOLOv8, etc.)
             try:
-                logger.info("Loading official YOLOv3 model...")
-                self.model = YOLO(model_weights)  # This will download official weights
-                logger.info("Successfully loaded official YOLOv3 model")
+                logger.info(f"Loading {model_name} model directly...")
+                self.model = YOLO(model_weights)  # This will download if needed
+                logger.info(f"Successfully loaded {model_name} model")
                         
             except Exception as e1:
-                logger.warning(f"Official weights loading failed: {e1}")
+                logger.warning(f"Direct model loading failed: {e1}")
                 try:
-                    # Fallback - try loading from hub
-                    logger.info("Attempting to load from hub...")
-                    self.model = YOLO("yolov3")  # This will download from hub if needed
-                    logger.info("Successfully loaded model from hub")
+                    # Fallback - try loading from model name
+                    logger.info(f"Attempting to load {model_name} from hub...")
+                    self.model = YOLO(model_name)  # This will download from hub if needed
+                    logger.info(f"Successfully loaded {model_name} from hub")
                     
                 except Exception as e2:
-                    # Final fallback - try creating from YAML
-                    try:
-                        logger.info("Falling back to YAML model creation...")
-                        
-                        # First try user-specified YAML if provided
-                        if 'yaml' in self.config['model']:
-                            yaml_path = Path(self.config['model']['yaml'])
-                            if not yaml_path.exists():
-                                raise FileNotFoundError(f"Specified YAML file not found: {yaml_path}")
-                        else:
-                            # Try default location
-                            yaml_path = Path("models/configs/yolov3.yaml")
-                            if not yaml_path.exists():
-                                # Try relative to current directory
-                                yaml_path = Path.cwd() / "models" / "configs" / "yolov3.yaml"
-                                if not yaml_path.exists():
-                                    raise FileNotFoundError(f"Default YAML file not found: {yaml_path}")
-                        
-                        self.model = YOLO(str(yaml_path))
-                        logger.info("Successfully created model from YAML")
-                    except Exception as e3:
-                        raise RuntimeError(f"Model loading failed: Official error: {e1}, Hub error: {e2}, YAML error: {e3}")
+                    # No fallback - YOLOv11 is required
+                    raise RuntimeError(f"YOLOv11 model loading failed: Direct error: {e1}, Hub error: {e2}. Please ensure YOLOv11 is properly installed.")
                     
-                            
-            # Configure for 1025 classes
+            # Configure for the specified number of classes
             logger.info(f"Configuring model for {classes} classes...")
             
             # Update the model to support our number of classes

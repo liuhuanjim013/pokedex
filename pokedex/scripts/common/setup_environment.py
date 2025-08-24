@@ -142,33 +142,79 @@ def create_conda_environment(env_name="pokemon-classifier", python_version="3.9"
 def install_uv():
     """Install uv using conda"""
     print("📦 Installing uv...")
+    print("   This may take a few minutes for conda to download and install...")
     try:
         conda_path = get_conda_path()
         if conda_path is None:
             print("❌ Conda is not available. Cannot install uv.")
             return False
-        subprocess.check_call([conda_path, "install", "-c", "conda-forge", "uv", "-y"])
+        
+        # Use verbose output and show progress
+        result = subprocess.run([
+            conda_path, "install", "-c", "conda-forge", "uv", "-y", "--verbose"
+        ], capture_output=True, text=True, timeout=600)  # 10 minute timeout
+        
+        if result.returncode != 0:
+            print(f"❌ Failed to install uv:")
+            print(f"STDOUT: {result.stdout}")
+            print(f"STDERR: {result.stderr}")
+            return False
+        
         print("✅ uv installed successfully!")
+        
+        # Show some of the installation output
+        if result.stdout:
+            lines = result.stdout.split('\n')
+            # Show last 5 lines of output
+            print("📋 Installation output (last 5 lines):")
+            for line in lines[-5:]:
+                if line.strip():
+                    print(f"   {line}")
+        
         return True
-    except subprocess.CalledProcessError as e:
+    except subprocess.TimeoutExpired:
+        print("⏰ uv installation timed out after 10 minutes")
+        print("💡 This might be due to slow internet connection")
+        return False
+    except Exception as e:
         print(f"❌ Failed to install uv: {e}")
         return False
 
 def install_dependencies_with_uv(requirements_file, env_name="pokemon-classifier"):
     """Install dependencies using uv in the specified conda environment"""
     print(f"📦 Installing dependencies from {requirements_file}...")
+    print(f"   This may take several minutes for large packages like PyTorch...")
+    
     try:
         conda_path = get_conda_path()
         if conda_path is None:
             print("❌ Conda is not available. Cannot install dependencies.")
             return False
-        # Use conda run to execute uv in the specified environment
-        subprocess.check_call([
-            conda_path, "run", "-n", env_name, "uv", "pip", "install", "-r", requirements_file
-        ])
+        
+        # Use conda run to execute uv in the specified environment with verbose output
+        result = subprocess.run([
+            conda_path, "run", "-n", env_name, "uv", "pip", "install", "--verbose", "-r", requirements_file
+        ], capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            print(f"❌ Failed to install dependencies:")
+            print(f"STDOUT: {result.stdout}")
+            print(f"STDERR: {result.stderr}")
+            return False
+        
         print(f"✅ Dependencies installed successfully!")
+        
+        # Show some of the installation output for debugging
+        if result.stdout:
+            lines = result.stdout.split('\n')
+            # Show last 10 lines of output
+            print("📋 Installation output (last 10 lines):")
+            for line in lines[-10:]:
+                if line.strip():
+                    print(f"   {line}")
+        
         return True
-    except subprocess.CalledProcessError as e:
+    except Exception as e:
         print(f"❌ Failed to install dependencies: {e}")
         return False
 
@@ -949,9 +995,31 @@ def main():
         print("  • Deploy kmodel and classes.txt to Maix Bit SD card")
         return
 
-    # Install uv if not already installed
-    if not install_uv():
-        return
+    # Check if uv is already installed
+    print("🔍 Checking if uv is already installed...")
+    try:
+        conda_path = get_conda_path()
+        if conda_path:
+            result = subprocess.run([
+                conda_path, "run", "-n", args.env_name, "uv", "--version"
+            ], capture_output=True, text=True, timeout=30)
+            
+            if result.returncode == 0:
+                print(f"✅ uv is already installed: {result.stdout.strip()}")
+                print("   Skipping uv installation...")
+            else:
+                print("❌ uv not found, installing...")
+                if not install_uv():
+                    return
+        else:
+            print("❌ Conda not available, cannot check uv")
+            if not install_uv():
+                return
+    except Exception as e:
+        print(f"⚠️ Could not check uv installation: {e}")
+        print("   Attempting to install uv...")
+        if not install_uv():
+            return
     
     # Regular installation flow
     # Install base requirements
