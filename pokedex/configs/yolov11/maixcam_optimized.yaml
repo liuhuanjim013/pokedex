@@ -1,0 +1,115 @@
+# Maix Cam YOLOv11 Configuration
+# Optimized for modern hardware with full 1025 Pokemon classes
+# Based on latest YOLOv11 recommendations for classification tasks
+
+# Model configuration (YOLOTrainer expects this structure)
+model:
+  name: "yolo11m"  # YOLOv11 medium model
+  weights: "yolo11m"  # Use model name (Ultralytics will download)
+  classes: 1025  # All Pokemon generations 1-9
+  img_size: 256  # Optimal resolution for classification
+  pretrained: true
+
+# Training configuration
+training:
+  epochs: 100
+  batch_size: 16
+  learning_rate: 0.01  # YOLOv11 default learning rate
+  optimizer: "auto"  # YOLOv11 auto-selects best optimizer
+  momentum: 0.937  # SGD momentum
+  weight_decay: 0.001  # Weight decay for regularization
+  scheduler: "cosine"
+  warmup_epochs: 3
+  
+  # YOLOv11 Classification-specific augmentations
+  augmentation:
+    # Resize-based pipeline (avoid aggressive random crops)
+    resize: true  # Use resize instead of random crops
+    randaugment: true  # RandAugment for fine-grained classification
+    random_erasing: 0.1  # RandomErasing for robustness
+    hsv_h: 0.015  # HSV hue augmentation
+    hsv_s: 0.7    # HSV saturation augmentation  
+    hsv_v: 0.4    # HSV value augmentation
+    degrees: 15.0  # Rotation augmentation
+    translate: 0.2  # Translation augmentation
+    scale: 0.5     # Scale augmentation
+    shear: 2.0     # Shear augmentation
+    perspective: 0.001  # Perspective augmentation
+    flipud: 0.5    # Vertical flip
+    fliplr: 0.5    # Horizontal flip
+    # Disable detection-specific augmentations for classification
+    mosaic: 0.0    # Disabled for classification
+    mixup: 0.0     # Disabled for classification
+  
+  # Early stopping
+  early_stopping:
+    patience: 15
+    min_delta: 0.001
+    monitor: "val_loss"
+
+# Data configuration
+data:
+  dataset: "liuhuanjim013/pokemon-yolo-1025"  # Use existing dataset
+  train_split: 0.7
+  val_split: 0.15
+  test_split: 0.15
+  path: data/yolo_dataset  # Local dataset path (relative)
+  train: images/train  # Training images
+  val: images/validation  # Validation images
+  test: images/test  # Test images
+  nc: 1025  # Number of classes (all Pokemon generations 1-9)
+
+# W&B configuration (YOLOTrainer expects this structure)
+wandb:
+  project: "pokemon-classifier-maixcam"
+  name: "yolo11m-maixcam-classification"
+  entity: "liuhuanjim013-self"
+  tags: ["yolo11m", "maixcam", "1025-classes", "classification", "modern"]
+  settings:
+    save_code: false
+    disable_git: true
+
+# Checkpoint configuration (YOLOTrainer expects this structure)
+checkpoint:
+  save_frequency: 10
+  save_dir: "models/checkpoints/maixcam"
+  max_checkpoints: 50
+
+# Maix Cam specific deployment settings
+maixcam:
+  # Target constraints (much more relaxed than K210)
+  target_model_size: "50MB"  # No artificial constraints
+  target_runtime_memory: "100MB"  # Sufficient for full model
+  input_size: 256  # Optimal resolution for classification
+  
+  # Export settings for Maix Cam
+  export:
+    format: "onnx"
+    opset: 12
+    dynamic: false  # Fixed input size for Maix Cam
+    simplify: true
+    
+  # Quantization for Maix Cam (optional)
+  quantization:
+    enabled: false  # Not required for Maix Cam
+    type: "int8"
+    calibration_samples: 400
+    
+  # MaixCam converter settings
+  converter:
+    target: "maixcam"
+    input_layout: "NCHW"
+    output_layout: "NCHW"
+    mean: [0.0, 0.0, 0.0]
+    std: [255.0, 255.0, 255.0]
+
+# Maix Cam advantages over K210 (for reference)
+maixcam_advantages:
+  - "Modern architecture (K230+ vs K210)"
+  - "Much larger memory (no artificial constraints)"
+  - "Native YOLOv5/v8/v11 support"
+  - "Modern converter (no nncase compatibility issues)"
+  - "Higher inference speed and accuracy"
+  - "Full 1025 Pokemon classes without reduction"
+  - "256x256 resolution (vs 224x224 for K210)"
+  - "Real-time 30 FPS performance target"

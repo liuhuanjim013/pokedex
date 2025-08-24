@@ -234,7 +234,10 @@ class YOLOTrainer:
         
         # Auto-detect data config based on model type
         run_name = self.config['wandb']['name'].lower()
-        if 'yolov5n' in run_name and 'k210' in run_name:
+        if 'maixcam' in run_name:
+            data_config_path = 'configs/yolov11/maixcam_data_simple.yaml'
+            logger.info("📊 Using Maix Cam YOLOv11 data configuration")
+        elif 'yolov5n' in run_name and 'k210' in run_name:
             data_config_path = 'configs/yolov3/yolov5n_k210_data.yaml'
             logger.info("📊 Using YOLOv5n K210 data configuration")
         elif 'k210' in run_name:
@@ -373,7 +376,7 @@ class YOLOTrainer:
             while True:
                 try:
                     # Check if training directory exists - look for actual training dirs
-                    training_dirs = ['pokemon-classifier', 'pokemon-yolo-training']
+                    training_dirs = ['pokemon-classifier', 'pokemon-yolo-training', 'runs', 'models/maixcam']
                     backup_dir = '/content/drive/MyDrive/pokemon-yolo-training/'
                     
                     for training_dir in training_dirs:

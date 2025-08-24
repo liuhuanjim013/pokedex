@@ -18,6 +18,10 @@ sys.path.insert(0, str(project_root))
 from src.training.yolo.trainer import YOLOTrainer
 from src.training.yolo.wandb_integration import WandBIntegration
 import wandb
+import subprocess
+import threading
+import time
+from pathlib import Path
 
 def setup_logging():
     """Configure logging for Maix Cam YOLOv11 training"""
@@ -51,6 +55,46 @@ def parse_args():
     parser.add_argument('--force-new-run', action='store_true',
                        help='Force new W&B run even if checkpoint exists')
     return parser.parse_args()
+
+def setup_maixcam_backup(logger):
+    """Set up automatic backup to Google Drive for Maix Cam training."""
+    def backup_worker():
+        """Background worker to backup training outputs."""
+        while True:
+            try:
+                # Look for Maix Cam training directories
+                training_dirs = [
+                    'pokemon-classifier',  # Default Ultralytics directory
+                    'pokemon-classifier-maixcam',  # Maix Cam specific directory
+                    'pokemon-yolo-training',  # Alternative directory
+                    'runs',  # Another possible location
+                    'models/maixcam'  # Our custom directory
+                ]
+                backup_dir = '/content/drive/MyDrive/pokemon-yolo-training/maixcam/'
+                
+                for training_dir in training_dirs:
+                    if Path(training_dir).exists():
+                        # Create backup directory if it doesn't exist
+                        Path(backup_dir).mkdir(parents=True, exist_ok=True)
+                        
+                        # Backup to Google Drive
+                        subprocess.run([
+                            'rsync', '-ravz',
+                            f'{training_dir}/',
+                            backup_dir
+                        ], check=False)  # Don't fail if Google Drive not mounted
+                        logger.info(f"📁 Maix Cam auto-backup completed: {training_dir} -> {backup_dir}")
+                
+                # Wait 30 minutes before next backup
+                time.sleep(1800)
+            except Exception as e:
+                logger.warning(f"Maix Cam auto-backup failed: {e}")
+                time.sleep(1800)  # Wait before retrying
+    
+    # Start backup worker in background
+    backup_thread = threading.Thread(target=backup_worker, daemon=True)
+    backup_thread.start()
+    logger.info("🔄 Maix Cam auto-backup to Google Drive enabled (every 30 minutes)")
 
 def main():
     """Main training function for Maix Cam YOLOv11"""
@@ -109,7 +153,7 @@ def main():
     # Create YOLO trainer with Maix Cam optimizations for YOLOv11
     # Use the correct constructor signature
     trainer = YOLOTrainer(
-        config_path="configs/yolov11/maixcam_data.yaml",
+        config_path="configs/yolov11/maixcam_optimized.yaml",
         resume_id=None if args.force_new_run else None
     )
     
@@ -127,6 +171,9 @@ def main():
     # Create directories
     for dir_path in storage_dirs.values():
         os.makedirs(dir_path, exist_ok=True)
+    
+    # Set up Maix Cam specific backup
+    setup_maixcam_backup(logger)
     
     try:
         # Start training
@@ -146,6 +193,24 @@ def main():
         
         logger.info(f"Training completed successfully!")
         logger.info(f"Best checkpoint: {checkpoint_path}")
+        
+        # Manual backup of final results
+        try:
+            backup_dir = '/content/drive/MyDrive/pokemon-yolo-training/maixcam/'
+            Path(backup_dir).mkdir(parents=True, exist_ok=True)
+            
+            # Backup all training directories
+            training_dirs = ['pokemon-classifier', 'pokemon-classifier-maixcam', 'pokemon-yolo-training', 'runs', 'models/maixcam']
+            for training_dir in training_dirs:
+                if Path(training_dir).exists():
+                    subprocess.run([
+                        'rsync', '-ravz',
+                        f'{training_dir}/',
+                        backup_dir
+                    ], check=False)
+                    logger.info(f"📁 Final backup completed: {training_dir} -> {backup_dir}")
+        except Exception as e:
+            logger.warning(f"Final backup failed: {e}")
         
         # Export for Maix Cam (manual export after training)
         logger.info("Training completed! Model ready for Maix Cam deployment.")

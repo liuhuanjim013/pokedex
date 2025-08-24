@@ -62,9 +62,139 @@ def verify_repository():
         print("⚠️ Please ensure you're in the pokedex/pokedex directory")
         raise
 
+def install_conda():
+    """Install conda if not available."""
+    try:
+        print("📦 Installing conda...")
+        
+        # Download and install miniconda
+        subprocess.run([
+            "wget", "https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh", "-O", "miniconda.sh"
+        ], check=True)
+        
+        subprocess.run([
+            "bash", "miniconda.sh", "-b", "-p", "/content/miniconda3"
+        ], check=True)
+        
+        # Add conda to PATH
+        os.environ["PATH"] = "/content/miniconda3/bin:" + os.environ.get("PATH", "")
+        
+        print("✅ Conda installed successfully")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Failed to install conda: {e}")
+        return False
+
+def create_conda_environment():
+    """Create conda environment with proper error handling."""
+    try:
+        print("🔧 Creating conda environment: pokemon-classifier")
+        
+        # Get conda path
+        def get_conda_path():
+            if os.path.exists("/content/miniconda3/bin/conda"):
+                return "/content/miniconda3/bin/conda"
+            try:
+                result = subprocess.run(["which", "conda"], capture_output=True, text=True)
+                if result.returncode == 0:
+                    return result.stdout.strip()
+            except:
+                pass
+            for path in ["/home/liuhuan/miniconda3/bin/conda", "/opt/conda/bin/conda"]:
+                if os.path.exists(path):
+                    return path
+            return "conda"
+        
+        conda_path = get_conda_path()
+        
+        # First check if environment already exists
+        print("🔍 Checking if conda environment already exists...")
+        check_result = subprocess.run([
+            conda_path, "env", "list"
+        ], capture_output=True, text=True, timeout=30)
+        
+        if check_result.returncode == 0 and "pokemon-classifier" in check_result.stdout:
+            print("✅ Conda environment already exists")
+            return True
+        
+        # Try to create the environment
+        print("🔧 Creating new conda environment...")
+        result = subprocess.run([
+            conda_path, "create", "-n", "pokemon-classifier", "python=3.9", "-y"
+        ], capture_output=True, text=True, timeout=300)
+        
+        if result.returncode == 0:
+            print("✅ Conda environment created successfully")
+            return True
+        else:
+            print(f"⚠️ Conda environment creation had issues: {result.stderr}")
+            # Check if environment already exists
+            if "already exists" in result.stderr:
+                print("✅ Environment already exists, continuing...")
+                return True
+            return False
+            
+    except Exception as e:
+        print(f"❌ Failed to create conda environment: {e}")
+        return False
+
 def setup_environment():
     """Set up environment using centralized setup script."""
     try:
+        # First handle conda Terms of Service acceptance
+        print("🔧 Handling conda Terms of Service...")
+        
+        # Get conda path first
+        def get_conda_path():
+            if os.path.exists("/content/miniconda3/bin/conda"):
+                return "/content/miniconda3/bin/conda"
+            try:
+                result = subprocess.run(["which", "conda"], capture_output=True, text=True)
+                if result.returncode == 0:
+                    return result.stdout.strip()
+            except:
+                pass
+            for path in ["/home/liuhuan/miniconda3/bin/conda", "/opt/conda/bin/conda"]:
+                if os.path.exists(path):
+                    return path
+            return "conda"
+        
+        conda_path = get_conda_path()
+        print(f"🔍 Using conda at: {conda_path}")
+        
+        # Check if conda is actually available
+        if not os.path.exists(conda_path) and conda_path == "conda":
+            print("❌ Conda not found in PATH or common locations")
+            print("💡 Attempting to install conda...")
+            if install_conda():
+                # Re-get conda path after installation
+                conda_path = get_conda_path()
+                print(f"🔍 Using conda at: {conda_path}")
+            else:
+                print("❌ Failed to install conda")
+                raise FileNotFoundError(f"Conda not found and installation failed")
+        
+        try:
+            # Accept Terms of Service for main channels
+            subprocess.run([conda_path, 'tos', 'accept', '--override-channels', '--channel', 'https://repo.anaconda.com/pkgs/main'], 
+                          check=True, capture_output=True)
+            print("✅ Accepted Terms of Service for main channel")
+        except subprocess.CalledProcessError:
+            print("⚠️ Could not accept main channel ToS (may already be accepted)")
+        
+        try:
+            # Accept Terms of Service for r channel
+            subprocess.run([conda_path, 'tos', 'accept', '--override-channels', '--channel', 'https://repo.anaconda.com/pkgs/r'], 
+                          check=True, capture_output=True)
+            print("✅ Accepted Terms of Service for r channel")
+        except subprocess.CalledProcessError:
+            print("⚠️ Could not accept r channel ToS (may already be accepted)")
+        
+        # Ensure conda environment exists
+        if not create_conda_environment():
+            print("⚠️ Conda environment creation failed, but continuing...")
+        
         # First run centralized setup script to set up conda and uv
         print("🔧 Running centralized environment setup...")
         print("   This may take several minutes for conda operations...")
@@ -210,7 +340,42 @@ else:
             print(f"❌ Package installation failed:")
             print(f"STDOUT: {result.stdout}")
             print(f"STDERR: {result.stderr}")
-            raise subprocess.CalledProcessError(result.returncode, result.args)
+            
+            # Check if the issue is with the conda environment not existing
+            if "Not a conda environment" in result.stderr:
+                print("🔄 Conda environment not found, attempting to create it...")
+                try:
+                    # Try to create the environment manually
+                    conda_path = get_conda_path()
+                    subprocess.run([
+                        conda_path, "create", "-n", "pokemon-classifier", "python=3.9", "-y"
+                    ], check=True, capture_output=True, text=True)
+                    print("✅ Conda environment created successfully")
+                    
+                    # Now try the package installation again
+                    print("🔄 Retrying package installation...")
+                    retry_result = subprocess.run([
+                        conda_path, "run", "-n", "pokemon-classifier",
+                        "uv", "pip", "install", "--verbose",
+                        # Core ML packages
+                        "ultralytics", "wandb", "huggingface_hub",
+                        # Network resilience packages
+                        "backoff", "requests", "urllib3",
+                        # Progress tracking
+                        "tqdm", "rich"
+                    ], capture_output=True, text=True, timeout=600)
+                    
+                    if retry_result.returncode == 0:
+                        print("✅ Package installation successful on retry")
+                        result = retry_result
+                    else:
+                        raise subprocess.CalledProcessError(retry_result.returncode, retry_result.args)
+                        
+                except Exception as e:
+                    print(f"❌ Failed to create conda environment: {e}")
+                    raise subprocess.CalledProcessError(result.returncode, result.args)
+            else:
+                raise subprocess.CalledProcessError(result.returncode, result.args)
         
         print("✅ Critical packages installed with uv")
         print(f"📋 Installation output: {result.stdout[-500:]}...")  # Show last 500 chars
