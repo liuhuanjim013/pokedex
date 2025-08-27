@@ -1,0 +1,52 @@
+# MaixCam Conversion Dependencies
+# Based on: https://wiki.sipeed.com/maixpy/doc/zh/ai_model_converter/maixcam.html
+
+# Core ML frameworks
+torch>=1.12.0
+torchvision>=0.13.0
+torchaudio>=0.12.0
+
+# ONNX ecosystem
+onnx>=1.12.0
+onnxruntime>=1.12.0
+onnxsim>=0.1.0
+
+# Computer vision
+opencv-python>=4.5.0
+opencv-contrib-python>=4.5.0
+
+# Scientific computing
+numpy>=1.21.0
+scipy>=1.7.0
+matplotlib>=3.5.0
+seaborn>=0.11.0
+
+# Image processing
+pillow>=8.3.0
+
+# Utilities
+tqdm>=4.62.0
+pyyaml>=5.4.0
+
+# TensorFlow (for alternative conversion)
+tensorflow>=2.8.0
+keras>=2.8.0
+
+# Additional dependencies
+h5py>=3.6.0
+protobuf>=3.19.0
+six>=1.16.0
+future>=0.18.0
+requests>=2.27.0
+urllib3>=1.26.0
+certifi>=2021.10.0
+chardet>=4.0.0
+idna>=3.3.0
+packaging>=21.0.0
+setuptools>=60.0.0
+wheel>=0.37.0
+Cython>=0.29.0
+
+# MaixCam specific
+maixpy>=0.1.0
+maixcdk>=0.1.0
