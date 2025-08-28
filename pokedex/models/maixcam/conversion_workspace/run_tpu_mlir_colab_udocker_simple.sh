@@ -67,7 +67,7 @@ echo "✅ Container created"
 
 # Run the conversion with volume mounts
 echo "🐍 Running TPU-MLIR conversion in container..."
-udocker --allow-root run --volume=$(pwd):/workspace ${CONTAINER_NAME} bash -c "cd /workspace && python3 tpu_mlir_converter.py"
+udocker --allow-root run --volume=$(pwd):/workspace ${CONTAINER_NAME} bash -c "cd /workspace && export PATH=\$PATH:/opt/tpu-mlir/python/tools:/usr/local/bin:/opt/tpu-mlir/bin && which model_transform.py && python3 tpu_mlir_converter.py"
 
 if [ $? -eq 0 ]; then
     echo ""
