@@ -65,30 +65,15 @@ fi
 
 echo "✅ Container created"
 
-# Copy files to container
-echo "📁 Copying files to container..."
-udocker --allow-root cp pokemon_classifier.onnx ${CONTAINER_NAME}:/workspace/
-udocker --allow-root cp tpu_mlir_converter.py ${CONTAINER_NAME}:/workspace/
-udocker --allow-root cp -r images ${CONTAINER_NAME}:/workspace/
-
-echo "✅ Files copied to container"
-
-# Run the conversion
+# Run the conversion with volume mounts
 echo "🐍 Running TPU-MLIR conversion in container..."
-udocker --allow-root run ${CONTAINER_NAME} bash -c "cd /workspace && python3 tpu_mlir_converter.py"
+udocker --allow-root run --volume=$(pwd):/workspace ${CONTAINER_NAME} bash -c "cd /workspace && python3 tpu_mlir_converter.py"
 
 if [ $? -eq 0 ]; then
     echo ""
     echo "🎉 TPU-MLIR conversion completed successfully!"
     
-    # Copy output files from container
-    echo "📁 Copying output files from container..."
-    udocker --allow-root cp ${CONTAINER_NAME}:/workspace/*.cvimodel . 2>/dev/null || true
-    udocker --allow-root cp ${CONTAINER_NAME}:/workspace/*.mud . 2>/dev/null || true
-    udocker --allow-root cp ${CONTAINER_NAME}:/workspace/*.mlir . 2>/dev/null || true
-    udocker --allow-root cp ${CONTAINER_NAME}:/workspace/*_cali_table . 2>/dev/null || true
-    
-    echo "✅ Output files copied"
+    echo "✅ Output files created in current directory"
     
     # List output files
     echo ""

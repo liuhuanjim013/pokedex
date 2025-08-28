@@ -182,7 +182,14 @@ def main():
     # Configuration
     model_name = "pokemon_classifier"
     onnx_model = f"{model_name}.onnx"
-    workspace_dir = "/workspace"
+    
+    # Determine workspace directory based on environment
+    if os.path.exists("/workspace"):
+        # Docker container environment
+        workspace_dir = "/workspace"
+    else:
+        # Local environment (fallback)
+        workspace_dir = "."
     
     # Change to workspace directory
     os.chdir(workspace_dir)
