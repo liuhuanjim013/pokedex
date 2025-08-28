@@ -41,11 +41,11 @@ echo "✅ udocker found"
 
 # Clean up existing containers
 echo "🧹 Cleaning up existing containers..."
-udocker rm ${CONTAINER_NAME} 2>/dev/null || true
+udocker --allow-root rm ${CONTAINER_NAME} 2>/dev/null || true
 
 # Pull Docker image
 echo "📦 Pulling TPU-MLIR Docker image..."
-udocker pull ${DOCKER_IMAGE}
+udocker --allow-root pull ${DOCKER_IMAGE}
 
 if [ $? -ne 0 ]; then
     echo "❌ Failed to pull Docker image"
@@ -56,7 +56,7 @@ echo "✅ Docker image pulled successfully"
 
 # Create container
 echo "🔧 Creating udocker container..."
-udocker create --name=${CONTAINER_NAME} ${DOCKER_IMAGE}
+udocker --allow-root create --name=${CONTAINER_NAME} ${DOCKER_IMAGE}
 
 if [ $? -ne 0 ]; then
     echo "❌ Failed to create container"
@@ -67,15 +67,15 @@ echo "✅ Container created"
 
 # Copy files to container
 echo "📁 Copying files to container..."
-udocker cp pokemon_classifier.onnx ${CONTAINER_NAME}:/workspace/
-udocker cp tpu_mlir_converter.py ${CONTAINER_NAME}:/workspace/
-udocker cp -r images ${CONTAINER_NAME}:/workspace/
+udocker --allow-root cp pokemon_classifier.onnx ${CONTAINER_NAME}:/workspace/
+udocker --allow-root cp tpu_mlir_converter.py ${CONTAINER_NAME}:/workspace/
+udocker --allow-root cp -r images ${CONTAINER_NAME}:/workspace/
 
 echo "✅ Files copied to container"
 
 # Run the conversion
 echo "🐍 Running TPU-MLIR conversion in container..."
-udocker run ${CONTAINER_NAME} bash -c "cd /workspace && python3 tpu_mlir_converter.py"
+udocker --allow-root run ${CONTAINER_NAME} bash -c "cd /workspace && python3 tpu_mlir_converter.py"
 
 if [ $? -eq 0 ]; then
     echo ""
@@ -83,10 +83,10 @@ if [ $? -eq 0 ]; then
     
     # Copy output files from container
     echo "📁 Copying output files from container..."
-    udocker cp ${CONTAINER_NAME}:/workspace/*.cvimodel . 2>/dev/null || true
-    udocker cp ${CONTAINER_NAME}:/workspace/*.mud . 2>/dev/null || true
-    udocker cp ${CONTAINER_NAME}:/workspace/*.mlir . 2>/dev/null || true
-    udocker cp ${CONTAINER_NAME}:/workspace/*_cali_table . 2>/dev/null || true
+    udocker --allow-root cp ${CONTAINER_NAME}:/workspace/*.cvimodel . 2>/dev/null || true
+    udocker --allow-root cp ${CONTAINER_NAME}:/workspace/*.mud . 2>/dev/null || true
+    udocker --allow-root cp ${CONTAINER_NAME}:/workspace/*.mlir . 2>/dev/null || true
+    udocker --allow-root cp ${CONTAINER_NAME}:/workspace/*_cali_table . 2>/dev/null || true
     
     echo "✅ Output files copied"
     
@@ -114,7 +114,7 @@ fi
 
 # Clean up container
 echo "🧹 Cleaning up container..."
-udocker rm ${CONTAINER_NAME}
+udocker --allow-root rm ${CONTAINER_NAME}
 
 echo "✅ TPU-MLIR conversion process completed!"
 
