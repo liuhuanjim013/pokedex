@@ -67,8 +67,7 @@ echo "✅ Container created"
 
 # Run the conversion with volume mounts
 echo "🐍 Running TPU-MLIR conversion in container..."
-echo "🔍 Checking TPU-MLIR tools availability..."
-udocker --allow-root run --volume=$(pwd):/workspace ${CONTAINER_NAME} bash -c "cd /workspace && echo 'Searching for TPU-MLIR tools...' && find / -name 'model_transform.py' 2>/dev/null | head -10 && echo 'Checking common TPU-MLIR locations...' && ls -la /opt/ 2>/dev/null || echo 'No /opt directory' && ls -la /usr/local/ 2>/dev/null || echo 'No /usr/local directory' && echo 'Setting up environment...' && export PYTHONPATH=\$PYTHONPATH:/opt/tpu-mlir/python && export PATH=\$PATH:/opt/tpu-mlir/python/tools:/usr/local/bin:/opt/tpu-mlir/bin && echo 'PATH:' \$PATH && echo 'PYTHONPATH:' \$PYTHONPATH && echo 'Available files in /workspace:' && ls -la /workspace && echo 'Starting conversion...' && python3 tpu_mlir_converter.py"
+udocker --allow-root run --volume=$(pwd):/workspace --volume=$(pwd)/tpu_mlir_packages:/tpu_mlir_packages ${CONTAINER_NAME} bash -c "cd /workspace && echo '📦 Installing TPU-MLIR from local package...' && pip install /tpu_mlir_packages/tpu_mlir-1.21.1-py3-none-any.whl && echo '✅ TPU-MLIR installation completed' && echo '🐍 Running Python conversion script...' && python3 tpu_mlir_converter.py"
 
 if [ $? -eq 0 ]; then
     echo ""
