@@ -23,6 +23,7 @@ fi
 # Check if images directory exists
 if [ -d "images" ]; then
     echo "✅ Images directory found - will mount directly"
+    echo "📊 Images directory contains $(find images -name "*.jpg" | wc -l) images"
 else
     echo "❌ Images directory not found"
     exit 1
