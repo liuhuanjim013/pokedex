@@ -29,7 +29,11 @@ if ! command -v udocker &> /dev/null; then
     echo "📦 Installing udocker..."
     curl https://raw.githubusercontent.com/indigo-dc/udocker/master/udocker.py > udocker
     chmod +x udocker
-    sudo mv udocker /usr/local/bin/
+    mv udocker ~/.local/bin/ 2>/dev/null || {
+        mkdir -p ~/.local/bin
+        mv udocker ~/.local/bin/
+    }
+    export PATH=$PATH:~/.local/bin
     echo "✅ udocker installed"
 fi
 
