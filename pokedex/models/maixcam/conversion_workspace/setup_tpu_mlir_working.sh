@@ -247,6 +247,9 @@ udocker --allow-root run --volume="${WORKSPACE_DIR}:/workspace" "${CONTAINER_NAM
       
       echo "▶️ Running production test…"
       python3 /workspace/test_cvimodel_production.py
+      
+      echo "▶️ Running multi-Pokemon test…"
+      python3 /workspace/test_multiple_pokemon.py
 '
 RC=$?
 set -e
