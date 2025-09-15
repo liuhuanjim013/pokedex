@@ -123,6 +123,74 @@ def ensure_classify_dataset(yolo_root: Path, cls_root: Path, logger: logging.Log
                 shutil.copy2(img_path, dst)
 
 
+def ensure_det1_dataset(yolo_root: Path, det_root: Path, logger: logging.Logger) -> None:
+    """Create a 1-class detector dataset by rewriting all labels' class_ids to 0.
+
+    Keeps original xywh normalized coordinates; mirrors directory structure.
+    Images are symlinked (fallback to copy), labels are rewritten.
+    """
+    splits = ["train", "validation", "test"]
+    for split in splits:
+        src_img_dir = yolo_root / split / "images"
+        src_lbl_dir = yolo_root / split / "labels"
+        dst_img_dir = det_root / split / "images"
+        dst_lbl_dir = det_root / split / "labels"
+        if not src_img_dir.exists() or not src_lbl_dir.exists():
+            logger.warning(f"Skipping split '{split}' (missing in source): {src_img_dir} or {src_lbl_dir}")
+            continue
+        dst_img_dir.mkdir(parents=True, exist_ok=True)
+        dst_lbl_dir.mkdir(parents=True, exist_ok=True)
+
+        # Link/copy images
+        for img_path in src_img_dir.rglob("*"):
+            if not img_path.is_file():
+                continue
+            if img_path.suffix.lower() not in (".jpg", ".jpeg", ".png"):
+                continue
+            dst_img = dst_img_dir / img_path.name
+            if not dst_img.exists():
+                try:
+                    os.symlink(img_path.resolve(), dst_img)
+                except OSError:
+                    shutil.copy2(img_path, dst_img)
+
+        # Rewrite labels
+        for lbl_path in src_lbl_dir.rglob("*.txt"):
+            rel = lbl_path.name
+            dst_lbl = dst_lbl_dir / rel
+            if dst_lbl.exists():
+                continue
+            try:
+                with open(lbl_path, "r", encoding="utf-8") as f_in, open(dst_lbl, "w", encoding="utf-8") as f_out:
+                    for line in f_in:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        parts = line.split()
+                        if len(parts) < 5:
+                            continue
+                        # Force class id to 0, keep bbox
+                        f_out.write("0 " + " ".join(parts[1:5]) + "\n")
+            except Exception as e:
+                logger.warning(f"Failed to rewrite label {lbl_path}: {e}")
+
+
+def write_det1_yaml(template_yaml: Path, out_yaml: Path, det_root: Path, logger: logging.Logger) -> None:
+    """Write a detector YAML pointing to det_root using the known subpaths."""
+    content = (
+        "path: " + str(det_root).replace("\\", "/") + "\n"
+        "train: train/images\n"
+        "val: validation/images\n"
+        "test: test/images\n"
+        "names: [\"pokemon\"]\n"
+        "nc: 1\n"
+    )
+    out_yaml.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_yaml, "w", encoding="utf-8") as f:
+        f.write(content)
+    logger.info(f"Wrote detector YAML -> {out_yaml} (path={det_root})")
+
+
 
 def main() -> None:
     logger = setup_logging()
@@ -130,9 +198,16 @@ def main() -> None:
 
     Path(args.outdir).mkdir(parents=True, exist_ok=True)
 
-    # 1) Train detector (1 class)
+    # 1) Train detector (1 class) - ensure relabeled dataset and YAML pointing to it
+    det_src_root = Path("data/yolo_dataset")
+    det_out_root = Path("data/yolo_dataset_det1")
+    ensure_det1_dataset(det_src_root, det_out_root, logger)
+
+    det_yaml_autogen = Path("configs/yolov11/pokemon_det1_autogen.yaml")
+    write_det1_yaml(Path(args.det_data), det_yaml_autogen, det_out_root, logger)
+
     det_train_cmd = (
-        f"yolo detect train model={args.det_model} data={args.det_data} "
+        f"yolo detect train model={args.det_model} data={det_yaml_autogen} "
         f"imgsz={args.det_imgsz} epochs={args.det_epochs} batch={args.det_batch} "
         f"cos_lr=True project=runs name={args.det_run_name}"
     )
