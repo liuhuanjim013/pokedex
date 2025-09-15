@@ -12,9 +12,20 @@ Stage B: YOLO11n-cls classifier (1025 classes) at 224
 import argparse
 import logging
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+# Add project root for imports like src.data.pokemon_names
+project_root = Path(__file__).parent.parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+try:
+    from src.data.pokemon_names import POKEMON_NAMES
+except Exception:
+    POKEMON_NAMES = {}
 
 
 def setup_logging() -> logging.Logger:
@@ -45,7 +56,7 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("--cls-model", type=str, default="yolo11n-cls.pt",
                         help="Ultralytics classifier model to start from")
-    parser.add_argument("--cls-data", type=str, default="dataset",
+    parser.add_argument("--cls-data", type=str, default="data/classify_dataset",
                         help="Classifier dataset root (train/ and val/ subdirs)")
     parser.add_argument("--cls-imgsz", type=int, default=224, help="Classifier image size")
     parser.add_argument("--cls-epochs", type=int, default=80, help="Classifier epochs")
@@ -58,6 +69,59 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--outdir", type=str, default="models/maixcam/exports",
                         help="Directory to copy exports into")
     return parser.parse_args()
+def _class_dir_name(pokemon_id: str) -> str:
+    name = POKEMON_NAMES.get(pokemon_id, None)
+    return f"{pokemon_id}_{name}" if name else pokemon_id
+
+
+def ensure_classify_dataset(yolo_root: Path, cls_root: Path, logger: logging.Logger) -> None:
+    """Build a classification dataset from existing YOLO dataset via symlinks.
+
+    yolo_root structure:
+      yolo_root/
+        train/images/*.jpg
+        validation/images/*.jpg
+
+    cls_root structure created:
+      cls_root/
+        train/<0001_bulbasaur>/*.jpg
+        val/<0001_bulbasaur>/*.jpg
+    """
+    # If dataset already present with expected structure, skip
+    train_dir = cls_root / "train"
+    val_dir = cls_root / "val"
+    if train_dir.exists() and val_dir.exists():
+        logger.info(f"Classifier dataset exists at {cls_root}, skipping build.")
+        return
+
+    logger.info(f"Building classifier dataset at {cls_root} from {yolo_root} ...")
+    for split_yolo, split_cls in (("train", "train"), ("validation", "val")):
+        src_images_dir = yolo_root / split_yolo / "images"
+        if not src_images_dir.exists():
+            logger.warning(f"Missing YOLO images dir: {src_images_dir}")
+            continue
+        dst_split_dir = cls_root / split_cls
+        dst_split_dir.mkdir(parents=True, exist_ok=True)
+
+        for img_path in src_images_dir.rglob("*"):
+            if not img_path.is_file():
+                continue
+            suffix = img_path.suffix.lower()
+            if suffix not in (".jpg", ".jpeg", ".png"):
+                continue
+            stem = img_path.stem  # e.g., 0001_001
+            pokemon_id = stem.split("_")[0]
+            class_dir = dst_split_dir / _class_dir_name(pokemon_id)
+            class_dir.mkdir(parents=True, exist_ok=True)
+
+            dst = class_dir / img_path.name
+            if dst.exists():
+                continue
+            try:
+                os.symlink(img_path.resolve(), dst)
+            except OSError:
+                shutil.copy2(img_path, dst)
+
 
 
 def main() -> None:
@@ -91,6 +155,12 @@ def main() -> None:
             run_cmd(f"cp {det_onnx} {os.path.join(args.outdir, 'best_det.onnx')}", logger)
 
     # 2) Train classifier (1025 classes)
+    # Auto-build classification dataset if needed
+    try:
+        ensure_classify_dataset(Path("data/yolo_dataset"), Path(args.cls_data), logger)
+    except Exception as e:
+        logger.warning(f"Failed to auto-build classification dataset: {e}")
+
     cls_train_cmd = (
         f"yolo classify train model={args.cls_model} data={args.cls_data} "
         f"imgsz={args.cls_imgsz} epochs={args.cls_epochs} batch={args.cls_batch} "
