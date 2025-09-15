@@ -68,6 +68,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--opset", type=int, default=12, help="ONNX opset")
     parser.add_argument("--outdir", type=str, default="models/maixcam/exports",
                         help="Directory to copy exports into")
+    parser.add_argument("--no-resume", action="store_true", help="Disable auto-resume if checkpoints exist")
     return parser.parse_args()
 def _class_dir_name(pokemon_id: str) -> str:
     name = POKEMON_NAMES.get(pokemon_id, None)
@@ -206,11 +207,20 @@ def main() -> None:
     det_yaml_autogen = Path("configs/yolov11/pokemon_det1_autogen.yaml")
     write_det1_yaml(Path(args.det_data), det_yaml_autogen, det_out_root, logger)
 
-    det_train_cmd = (
-        f"yolo detect train model={args.det_model} data={det_yaml_autogen} "
-        f"imgsz={args.det_imgsz} epochs={args.det_epochs} batch={args.det_batch} "
-        f"cos_lr=True project=runs name={args.det_run_name}"
-    )
+    # Build detector train command with auto-resume if last.pt exists
+    det_run_dir = Path("runs") / "detect" / args.det_run_name
+    det_last = det_run_dir / "weights" / "last.pt"
+    if det_last.exists() and not args.no_resume:
+        det_train_cmd = (
+            f"yolo detect train resume=True project=runs name={args.det_run_name} "
+            f"save_period=1"
+        )
+    else:
+        det_train_cmd = (
+            f"yolo detect train model={args.det_model} data={det_yaml_autogen} "
+            f"imgsz={args.det_imgsz} epochs={args.det_epochs} batch={args.det_batch} "
+            f"cos_lr=True project=runs name={args.det_run_name} save_period=1"
+        )
     run_cmd(det_train_cmd, logger)
 
     det_best = f"runs/detect/{args.det_run_name}/weights/best.pt"
@@ -236,11 +246,20 @@ def main() -> None:
     except Exception as e:
         logger.warning(f"Failed to auto-build classification dataset: {e}")
 
-    cls_train_cmd = (
-        f"yolo classify train model={args.cls_model} data={args.cls_data} "
-        f"imgsz={args.cls_imgsz} epochs={args.cls_epochs} batch={args.cls_batch} "
-        f"cos_lr=True project=runs name={args.cls_run_name}"
-    )
+    # Build classifier train command with auto-resume if last.pt exists
+    cls_run_dir = Path("runs") / "classify" / args.cls_run_name
+    cls_last = cls_run_dir / "weights" / "last.pt"
+    if cls_last.exists() and not args.no_resume:
+        cls_train_cmd = (
+            f"yolo classify train resume=True project=runs name={args.cls_run_name} "
+            f"save_period=1"
+        )
+    else:
+        cls_train_cmd = (
+            f"yolo classify train model={args.cls_model} data={args.cls_data} "
+            f"imgsz={args.cls_imgsz} epochs={args.cls_epochs} batch={args.cls_batch} "
+            f"cos_lr=True project=runs name={args.cls_run_name} save_period=1"
+        )
     run_cmd(cls_train_cmd, logger)
 
     cls_best = f"runs/classify/{args.cls_run_name}/weights/best.pt"
