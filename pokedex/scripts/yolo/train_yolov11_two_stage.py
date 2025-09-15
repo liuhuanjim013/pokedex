@@ -75,6 +75,31 @@ def _class_dir_name(pokemon_id: str) -> str:
     return f"{pokemon_id}_{name}" if name else pokemon_id
 
 
+def _find_latest_run_dir(task: str, base_name: str) -> Path:
+    """Find an existing Ultralytics run dir that matches base_name or base_name<idx> under runs/<task>/.
+
+    Returns Path('') if none found.
+    """
+    task_root = Path("runs") / task
+    if not task_root.exists():
+        return Path("")
+    # Exact match first
+    exact = task_root / base_name
+    if exact.exists():
+        return exact
+    # Fuzzy match: base_name, base_name2, base_name3 ... pick most recent mtime
+    candidates = []
+    for d in task_root.iterdir():
+        if not d.is_dir():
+            continue
+        if d.name == base_name or d.name.startswith(base_name):
+            candidates.append((d.stat().st_mtime, d))
+    if not candidates:
+        return Path("")
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    return candidates[0][1]
+
+
 def ensure_classify_dataset(yolo_root: Path, cls_root: Path, logger: logging.Logger) -> None:
     """Build a classification dataset from existing YOLO dataset via symlinks.
 
@@ -208,22 +233,23 @@ def main() -> None:
     write_det1_yaml(Path(args.det_data), det_yaml_autogen, det_out_root, logger)
 
     # Build detector train command with auto-resume if last.pt exists
-    det_run_dir = Path("runs") / "detect" / args.det_run_name
+    # Resolve existing run directory (handles name, name2, ...)
+    resolved_det_dir = _find_latest_run_dir("detect", args.det_run_name)
+    det_run_dir = resolved_det_dir if resolved_det_dir else (Path("runs") / "detect" / args.det_run_name)
     det_last = det_run_dir / "weights" / "last.pt"
     if det_last.exists() and not args.no_resume:
         det_train_cmd = (
-            f"yolo detect train resume=True project=runs name={args.det_run_name} "
-            f"save_period=1"
+            f"yolo detect train resume=True project=runs name={det_run_dir.name} exist_ok=True save_period=1"
         )
     else:
         det_train_cmd = (
             f"yolo detect train model={args.det_model} data={det_yaml_autogen} "
             f"imgsz={args.det_imgsz} epochs={args.det_epochs} batch={args.det_batch} "
-            f"cos_lr=True project=runs name={args.det_run_name} save_period=1"
+            f"cos_lr=True project=runs name={args.det_run_name} exist_ok=True save_period=1"
         )
     run_cmd(det_train_cmd, logger)
 
-    det_best = f"runs/detect/{args.det_run_name}/weights/best.pt"
+    det_best = f"runs/detect/{det_run_dir.name}/weights/best.pt"
     if not Path(det_best).exists():
         # fallback to default Ultralytics path
         det_best = "runs/detect/train/weights/best.pt"
@@ -247,22 +273,22 @@ def main() -> None:
         logger.warning(f"Failed to auto-build classification dataset: {e}")
 
     # Build classifier train command with auto-resume if last.pt exists
-    cls_run_dir = Path("runs") / "classify" / args.cls_run_name
+    resolved_cls_dir = _find_latest_run_dir("classify", args.cls_run_name)
+    cls_run_dir = resolved_cls_dir if resolved_cls_dir else (Path("runs") / "classify" / args.cls_run_name)
     cls_last = cls_run_dir / "weights" / "last.pt"
     if cls_last.exists() and not args.no_resume:
         cls_train_cmd = (
-            f"yolo classify train resume=True project=runs name={args.cls_run_name} "
-            f"save_period=1"
+            f"yolo classify train resume=True project=runs name={cls_run_dir.name} exist_ok=True save_period=1"
         )
     else:
         cls_train_cmd = (
             f"yolo classify train model={args.cls_model} data={args.cls_data} "
             f"imgsz={args.cls_imgsz} epochs={args.cls_epochs} batch={args.cls_batch} "
-            f"cos_lr=True project=runs name={args.cls_run_name} save_period=1"
+            f"cos_lr=True project=runs name={args.cls_run_name} exist_ok=True save_period=1"
         )
     run_cmd(cls_train_cmd, logger)
 
-    cls_best = f"runs/classify/{args.cls_run_name}/weights/best.pt"
+    cls_best = f"runs/classify/{cls_run_dir.name}/weights/best.pt"
     if not Path(cls_best).exists():
         cls_best = "runs/classify/train/weights/best.pt"
 
