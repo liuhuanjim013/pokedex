@@ -33,7 +33,7 @@ def run_cmd(cmd: str, logger: logging.Logger) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train/export two-stage YOLO11n pipeline")
-    parser.add_argument("--det-data", type=str, default="pokedex/configs/yolov11/pokemon_det1.yaml",
+    parser.add_argument("--det-data", type=str, default="configs/yolov11/pokemon_det1.yaml",
                         help="Detector data YAML (1-class)")
     parser.add_argument("--det-model", type=str, default="yolo11n.pt",
                         help="Ultralytics detector model to start from")
@@ -68,13 +68,13 @@ def main() -> None:
 
     # 1) Train detector (1 class)
     det_train_cmd = (
-        f"yolo detect train model={args.det-model} data={args.det-data} "
-        f"imgsz={args.det-imgsz} epochs={args.det-epochs} batch={args.det-batch} "
-        f"cos_lr=True project=runs name={args.det-run-name}"
+        f"yolo detect train model={args.det_model} data={args.det_data} "
+        f"imgsz={args.det_imgsz} epochs={args.det_epochs} batch={args.det_batch} "
+        f"cos_lr=True project=runs name={args.det_run_name}"
     )
     run_cmd(det_train_cmd, logger)
 
-    det_best = f"runs/detect/{args.det-run-name}/weights/best.pt"
+    det_best = f"runs/detect/{args.det_run_name}/weights/best.pt"
     if not Path(det_best).exists():
         # fallback to default Ultralytics path
         det_best = "runs/detect/train/weights/best.pt"
@@ -82,7 +82,7 @@ def main() -> None:
     if args.export:
         det_export_cmd = (
             f"yolo export model={det_best} format=onnx opset={args.opset} "
-            f"imgsz={args.det-imgsz} dynamic=False simplify=True"
+            f"imgsz={args.det_imgsz} dynamic=False simplify=True"
         )
         run_cmd(det_export_cmd, logger)
 
@@ -92,20 +92,20 @@ def main() -> None:
 
     # 2) Train classifier (1025 classes)
     cls_train_cmd = (
-        f"yolo classify train model={args.cls-model} data={args.cls-data} "
-        f"imgsz={args.cls-imgsz} epochs={args.cls-epochs} batch={args.cls-batch} "
-        f"cos_lr=True project=runs name={args.cls-run-name}"
+        f"yolo classify train model={args.cls_model} data={args.cls_data} "
+        f"imgsz={args.cls_imgsz} epochs={args.cls_epochs} batch={args.cls_batch} "
+        f"cos_lr=True project=runs name={args.cls_run_name}"
     )
     run_cmd(cls_train_cmd, logger)
 
-    cls_best = f"runs/classify/{args.cls-run-name}/weights/best.pt"
+    cls_best = f"runs/classify/{args.cls_run_name}/weights/best.pt"
     if not Path(cls_best).exists():
         cls_best = "runs/classify/train/weights/best.pt"
 
     if args.export:
         cls_export_cmd = (
             f"yolo export model={cls_best} format=onnx opset={args.opset} "
-            f"imgsz={args.cls-imgsz} dynamic=False simplify=True"
+            f"imgsz={args.cls_imgsz} dynamic=False simplify=True"
         )
         run_cmd(cls_export_cmd, logger)
 
