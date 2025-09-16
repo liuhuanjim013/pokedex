@@ -100,17 +100,17 @@ set -euo pipefail
 cd /workspace
 echo '📦 Using system tpu-mlir from container'
 
-# Ensure TPU-MLIR is available in the container
-if ! python3 - <<'PY'
-try:
-    import tpu_mlir
-    print('✅ TPU-MLIR already present')
-except Exception as e:
-    raise SystemExit(1)
-PY
-then
+# Ensure TPU-MLIR is available in the container (prefer local wheel)
+WHEEL="/workspace/pokedex/models/maixcam/conversion_workspace/tpu_mlir_packages/tpu_mlir-1.21.1-py3-none-any.whl"
+if python3 -c "import tpu_mlir" 2>/dev/null; then
+  echo '✅ TPU-MLIR already present'
+else
   echo '📦 Installing TPU-MLIR==1.21.1 in container...'
-  python3 -m pip install -q --no-cache-dir tpu-mlir==1.21.1 || pip install -q --no-cache-dir tpu-mlir==1.21.1
+  if [ -f "$WHEEL" ]; then
+    python3 -m pip install -q --no-cache-dir "$WHEEL"
+  else
+    python3 -m pip install -q --no-cache-dir tpu-mlir==1.21.1
+  fi
   python3 - <<'PY'
 import tpu_mlir, sys
 print('✅ TPU-MLIR installed at', tpu_mlir.__file__)
@@ -118,8 +118,15 @@ print('Python', sys.version)
 PY
 fi
 
+# Use CLI entrypoints installed by tpu-mlir
+if ! command -v model_transform.py >/dev/null 2>&1; then
+  echo '❌ model_transform.py not found on PATH after install.'
+  echo '   Ensure tpu-mlir==1.21.1 provides CLI scripts in this image.'
+  exit 1
+fi
+
 # Detector
-python -m tpu_mlir.tools.model_transform \
+model_transform.py \
   --model_name pokemon_det1 \
   --model_def '$DET_ONNX' \
   --input_shapes [[1,3,256,256]] \
@@ -127,13 +134,13 @@ python -m tpu_mlir.tools.model_transform \
   --test_input '$DET_LIST' \
   --mlir pokemon_det1.mlir
 
-python -m tpu_mlir.tools.run_calibration \
+run_calibration.py \
   --mlir pokemon_det1.mlir \
   --dataset '$DET_DIR' \
   --input_num 256 \
   --calibration_table pokemon_det1_cali_table
 
-python -m tpu_mlir.tools.model_deploy \
+model_deploy.py \
   --mlir pokemon_det1.mlir \
   --quant_input \
   --calibration_table pokemon_det1_cali_table \
@@ -141,7 +148,7 @@ python -m tpu_mlir.tools.model_deploy \
   --model pokemon_det1_int8.cvimodel
 
 # Classifier
-python -m tpu_mlir.tools.model_transform \
+model_transform.py \
   --model_name pokemon_cls1025 \
   --model_def '$CLS_ONNX' \
   --input_shapes [[1,3,224,224]] \
@@ -149,13 +156,13 @@ python -m tpu_mlir.tools.model_transform \
   --test_input '$CLS_LIST' \
   --mlir pokemon_cls1025.mlir
 
-python -m tpu_mlir.tools.run_calibration \
+run_calibration.py \
   --mlir pokemon_cls1025.mlir \
   --dataset '$CLS_DIR' \
   --input_num 256 \
   --calibration_table pokemon_cls1025_cali_table
 
-python -m tpu_mlir.tools.model_deploy \
+model_deploy.py \
   --mlir pokemon_cls1025.mlir \
   --quant_input \
   --calibration_table pokemon_cls1025_cali_table \
