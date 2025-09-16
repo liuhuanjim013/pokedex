@@ -136,8 +136,10 @@ fi
 
 echo "🔧 Transform DET: $DET_ONNX"
 $MT --model_name pokemon_det1 --model_def "$DET_ONNX" \
-    --input_shapes [[1,3,256,256]] --keep_input_fp32 \
-    --test_input "$DET_LIST" --mlir pokemon_det1.mlir
+    --input_shapes [[1,3,256,256]] \
+    --mean 0,0,0 --scale 0.003922,0.003922,0.003922 \
+    --pixel_format rgb \
+    --mlir pokemon_det1.mlir
 
 echo "🧮 Calibrate DET"
 $RC --mlir pokemon_det1.mlir --dataset "$DET_DIR" --input_num 256 \
@@ -150,8 +152,10 @@ $MD --mlir pokemon_det1.mlir --quant_input \
 
 echo "🔧 Transform CLS: $CLS_ONNX"
 $MT --model_name pokemon_cls1025 --model_def "$CLS_ONNX" \
-    --input_shapes [[1,3,224,224]] --keep_input_fp32 \
-    --test_input "$CLS_LIST" --mlir pokemon_cls1025.mlir
+    --input_shapes [[1,3,224,224]] \
+    --mean 0,0,0 --scale 0.003922,0.003922,0.003922 \
+    --pixel_format rgb \
+    --mlir pokemon_cls1025.mlir
 
 echo "🧮 Calibrate CLS"
 $RC --mlir pokemon_cls1025.mlir --dataset "$CLS_DIR" --input_num 256 \
