@@ -146,7 +146,7 @@ $RC pokemon_det1.mlir --dataset "$DET_DIR" --input_num 256 \
     -o pokemon_det1_cali_table
 
 echo "🏗️  Deploy DET"
-$MD --mlir pokemon_det1.mlir --quant_input \
+$MD --mlir pokemon_det1.mlir --quantize INT8 \
     --calibration_table pokemon_det1_cali_table --chip "$CHIP" \
     --model pokemon_det1_int8.cvimodel
 
@@ -162,7 +162,7 @@ $RC pokemon_cls1025.mlir --dataset "$CLS_DIR" --input_num 256 \
     -o pokemon_cls1025_cali_table
 
 echo "🏗️  Deploy CLS"
-$MD --mlir pokemon_cls1025.mlir --quant_input \
+$MD --mlir pokemon_cls1025.mlir --quantize INT8 \
     --calibration_table pokemon_cls1025_cali_table --chip "$CHIP" \
     --model pokemon_cls1025_int8.cvimodel
 
