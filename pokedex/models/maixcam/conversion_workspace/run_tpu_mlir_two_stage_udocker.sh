@@ -100,6 +100,24 @@ set -euo pipefail
 cd /workspace
 echo '📦 Using system tpu-mlir from container'
 
+# Ensure TPU-MLIR is available in the container
+if ! python3 - <<'PY'
+try:
+    import tpu_mlir
+    print('✅ TPU-MLIR already present')
+except Exception as e:
+    raise SystemExit(1)
+PY
+then
+  echo '📦 Installing TPU-MLIR==1.21.1 in container...'
+  python3 -m pip install -q --no-cache-dir tpu-mlir==1.21.1 || pip install -q --no-cache-dir tpu-mlir==1.21.1
+  python3 - <<'PY'
+import tpu_mlir, sys
+print('✅ TPU-MLIR installed at', tpu_mlir.__file__)
+print('Python', sys.version)
+PY
+fi
+
 # Detector
 python -m tpu_mlir.tools.model_transform \
   --model_name pokemon_det1 \
