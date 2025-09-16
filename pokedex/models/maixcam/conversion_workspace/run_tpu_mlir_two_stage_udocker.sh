@@ -52,32 +52,50 @@ echo "✅ Det calib list: $DET_LIST (dir: $DET_DIR)"
 echo "✅ Cls calib list: $CLS_LIST (dir: $CLS_DIR)"
 echo "📁 Output dir: $OUT_DIR"
 
-# -------- udocker setup --------
-if ! command -v udocker >/dev/null 2>&1; then
-  echo "📦 Installing udocker..."
-  curl -fsSL https://raw.githubusercontent.com/indigo-dc/udocker/master/udocker.py -o udocker
-  chmod +x udocker
-  mkdir -p ~/.local/bin
-  mv udocker ~/.local/bin/
-  export PATH="$PATH:$HOME/.local/bin"
-  echo "✅ udocker installed"
+# -------- choose runtime: docker > udocker --------
+RUN_MODE="udocker"
+if command -v docker >/dev/null 2>&1; then
+  RUN_MODE="docker"
 fi
 
-echo "🧹 Cleaning old container (if any)"
-udocker --allow-root rm "$CONTAINER_NAME" >/dev/null 2>&1 || true
+if [ "$RUN_MODE" = "udocker" ]; then
+  if ! command -v udocker >/dev/null 2>&1; then
+    echo "📦 Installing udocker (pip user) ..."
+    if command -v pip >/dev/null 2>&1; then
+      pip install --user udocker || true
+      export PATH="$HOME/.local/bin:$PATH"
+    fi
+  fi
+  if ! command -v udocker >/dev/null 2>&1; then
+    echo "📦 Installing udocker (curl script) ..."
+    curl -fsSL https://raw.githubusercontent.com/indigo-dc/udocker/main/udocker.py -o udocker
+    chmod +x udocker
+    mkdir -p ~/.local/bin
+    mv udocker ~/.local/bin/
+    export PATH="$HOME/.local/bin:$PATH"
+  fi
+  command -v udocker >/dev/null 2>&1 || { echo "❌ udocker installation failed"; exit 1; }
 
-echo "📥 Pulling $DOCKER_IMAGE"
-udocker --allow-root pull "$DOCKER_IMAGE"
+  echo "🧹 Cleaning old container (if any)"
+  udocker --allow-root rm "$CONTAINER_NAME" >/dev/null 2>&1 || true
 
-echo "🔧 Creating container $CONTAINER_NAME"
-udocker --allow-root create --name="$CONTAINER_NAME" "$DOCKER_IMAGE"
+  echo "📥 Pulling $DOCKER_IMAGE"
+  udocker --allow-root pull "$DOCKER_IMAGE"
 
-# -------- Run conversion in container --------
-echo "🐍 Running conversion in container..."
-udocker --allow-root run \
-  --env PYTHONUNBUFFERED=1 \
-  --volume="$(pwd)":/workspace \
-  "$CONTAINER_NAME" bash -lc "
+  echo "🔧 Creating container $CONTAINER_NAME"
+  udocker --allow-root create --name="$CONTAINER_NAME" "$DOCKER_IMAGE"
+
+  echo "🐍 Running conversion in container (udocker)..."
+  RUNCMD=(udocker --allow-root run --env PYTHONUNBUFFERED=1 --volume="$(pwd)":/workspace "$CONTAINER_NAME" bash -lc)
+else
+  echo "🐳 Using Docker runtime"
+  echo "📥 Pulling $DOCKER_IMAGE"
+  docker pull "$DOCKER_IMAGE"
+  echo "🐍 Running conversion in container (docker)..."
+  RUNCMD=(docker run --rm -e PYTHONUNBUFFERED=1 -v "$(pwd)":/workspace "$DOCKER_IMAGE" bash -lc)
+fi
+
+"${RUNCMD[@]}" "
 set -euo pipefail
 cd /workspace
 echo '📦 Using system tpu-mlir from container'
