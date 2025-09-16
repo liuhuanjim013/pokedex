@@ -86,21 +86,31 @@ if [ "$RUN_MODE" = "udocker" ]; then
   udocker --allow-root create --name="$CONTAINER_NAME" "$DOCKER_IMAGE"
 
   echo "🐍 Running conversion in container (udocker)..."
-  RUNCMD=(udocker --allow-root run -e PYTHONUNBUFFERED=1 -v "$(pwd):/workspace" "$CONTAINER_NAME" bash -lc)
+  RUNTIME_CMD=(udocker --allow-root run -e PYTHONUNBUFFERED=1 \
+    -e CHIP="$CHIP" -e DET_ONNX="$DET_ONNX" -e CLS_ONNX="$CLS_ONNX" \
+    -e DET_LIST="$DET_LIST" -e DET_DIR="$DET_DIR" \
+    -e CLS_LIST="$CLS_LIST" -e CLS_DIR="$CLS_DIR" \
+    -e OUT_DIR="$OUT_DIR" \
+    -v "$(pwd):/workspace" "$CONTAINER_NAME" bash -lc)
 else
   echo "🐳 Using Docker runtime"
   echo "📥 Pulling $DOCKER_IMAGE"
   docker pull "$DOCKER_IMAGE"
   echo "🐍 Running conversion in container (docker)..."
-  RUNCMD=(docker run --rm -e PYTHONUNBUFFERED=1 -v "$(pwd)":/workspace "$DOCKER_IMAGE" bash -lc)
+  RUNTIME_CMD=(docker run --rm -e PYTHONUNBUFFERED=1 \
+    -e CHIP="$CHIP" -e DET_ONNX="$DET_ONNX" -e CLS_ONNX="$CLS_ONNX" \
+    -e DET_LIST="$DET_LIST" -e DET_DIR="$DET_DIR" \
+    -e CLS_LIST="$CLS_LIST" -e CLS_DIR="$CLS_DIR" \
+    -e OUT_DIR="$OUT_DIR" \
+    -v "$(pwd)":/workspace "$DOCKER_IMAGE" bash -lc)
 fi
-
-"${RUNCMD[@]}" "
+# Write container-side script to avoid host variable expansion issues
+TMP_SCRIPT="$(pwd)/.tmp_two_stage_convert.sh"
+cat > "$TMP_SCRIPT" << 'INSIDE'
 set -euo pipefail
 cd /workspace
-echo '📦 Using system tpu-mlir from container'
+echo "📦 Inside container: $(python3 -V)"
 
-# Ensure TPU-MLIR is available in the container (prefer local wheel)
 WHEEL="/workspace/pokedex/models/maixcam/conversion_workspace/tpu_mlir_packages/tpu_mlir-1.21.1-py3-none-any.whl"
 if python3 -c "import tpu_mlir" 2>/dev/null; then
   echo '✅ TPU-MLIR already present'
@@ -111,73 +121,54 @@ else
   else
     python3 -m pip install -q --no-cache-dir tpu-mlir==1.21.1
   fi
-  python3 - <<'PY'
-import tpu_mlir, sys
-print('✅ TPU-MLIR installed at', tpu_mlir.__file__)
-print('Python', sys.version)
-PY
 fi
 
-# Use CLI entrypoints installed by tpu-mlir
-if ! command -v model_transform.py >/dev/null 2>&1; then
-  echo '❌ model_transform.py not found on PATH after install.'
-  echo '   Ensure tpu-mlir==1.21.1 provides CLI scripts in this image.'
-  exit 1
+if command -v model_transform.py >/dev/null 2>&1; then
+  MT=model_transform.py
+  RC=run_calibration.py
+  MD=model_deploy.py
+else
+  # Fallback to module form
+  MT="python3 -m tpu_mlir.tools.model_transform"
+  RC="python3 -m tpu_mlir.tools.run_calibration"
+  MD="python3 -m tpu_mlir.tools.model_deploy"
 fi
 
-# Detector
-model_transform.py \
-  --model_name pokemon_det1 \
-  --model_def '$DET_ONNX' \
-  --input_shapes [[1,3,256,256]] \
-  --keep_input_fp32 \
-  --test_input '$DET_LIST' \
-  --mlir pokemon_det1.mlir
+echo "🔧 Transform DET: $DET_ONNX"
+$MT --model_name pokemon_det1 --model_def "$DET_ONNX" \
+    --input_shapes [[1,3,256,256]] --keep_input_fp32 \
+    --test_input "$DET_LIST" --mlir pokemon_det1.mlir
 
-run_calibration.py \
-  --mlir pokemon_det1.mlir \
-  --dataset '$DET_DIR' \
-  --input_num 256 \
-  --calibration_table pokemon_det1_cali_table
+echo "🧮 Calibrate DET"
+$RC --mlir pokemon_det1.mlir --dataset "$DET_DIR" --input_num 256 \
+    --calibration_table pokemon_det1_cali_table
 
-model_deploy.py \
-  --mlir pokemon_det1.mlir \
-  --quant_input \
-  --calibration_table pokemon_det1_cali_table \
-  --chip $CHIP \
-  --model pokemon_det1_int8.cvimodel
+echo "🏗️  Deploy DET"
+$MD --mlir pokemon_det1.mlir --quant_input \
+    --calibration_table pokemon_det1_cali_table --chip "$CHIP" \
+    --model pokemon_det1_int8.cvimodel
 
-# Classifier
-model_transform.py \
-  --model_name pokemon_cls1025 \
-  --model_def '$CLS_ONNX' \
-  --input_shapes [[1,3,224,224]] \
-  --keep_input_fp32 \
-  --test_input '$CLS_LIST' \
-  --mlir pokemon_cls1025.mlir
+echo "🔧 Transform CLS: $CLS_ONNX"
+$MT --model_name pokemon_cls1025 --model_def "$CLS_ONNX" \
+    --input_shapes [[1,3,224,224]] --keep_input_fp32 \
+    --test_input "$CLS_LIST" --mlir pokemon_cls1025.mlir
 
-run_calibration.py \
-  --mlir pokemon_cls1025.mlir \
-  --dataset '$CLS_DIR' \
-  --input_num 256 \
-  --calibration_table pokemon_cls1025_cali_table
+echo "🧮 Calibrate CLS"
+$RC --mlir pokemon_cls1025.mlir --dataset "$CLS_DIR" --input_num 256 \
+    --calibration_table pokemon_cls1025_cali_table
 
-model_deploy.py \
-  --mlir pokemon_cls1025.mlir \
-  --quant_input \
-  --calibration_table pokemon_cls1025_cali_table \
-  --chip $CHIP \
-  --model pokemon_cls1025_int8.cvimodel
+echo "🏗️  Deploy CLS"
+$MD --mlir pokemon_cls1025.mlir --quant_input \
+    --calibration_table pokemon_cls1025_cali_table --chip "$CHIP" \
+    --model pokemon_cls1025_int8.cvimodel
 
-# Move artifacts to output dir
-mkdir -p '$OUT_DIR'
-mv -f pokemon_det1_int8.cvimodel '$OUT_DIR/'
-mv -f pokemon_cls1025_int8.cvimodel '$OUT_DIR/'
-mv -f pokemon_det1.mlir pokemon_det1_cali_table '$OUT_DIR/'
-mv -f pokemon_cls1025.mlir pokemon_cls1025_cali_table '$OUT_DIR/'
+mkdir -p "$OUT_DIR"
+mv -f pokemon_det1_int8.cvimodel "$OUT_DIR/"
+mv -f pokemon_cls1025_int8.cvimodel "$OUT_DIR/"
+mv -f pokemon_det1.mlir pokemon_det1_cali_table "$OUT_DIR/"
+mv -f pokemon_cls1025.mlir pokemon_cls1025_cali_table "$OUT_DIR/"
 
-# Create MUDs
-cat > '$OUT_DIR/pokemon_det1.mud' << 'MUD'
+cat > "$OUT_DIR/pokemon_det1.mud" << 'MUD'
 type: yolo11
 cvimodel: /root/models/pokemon_det1_int8.cvimodel
 input:
@@ -196,7 +187,7 @@ labels:
   names: ["pokemon"]
 MUD
 
-cat > '$OUT_DIR/pokemon_cls1025.mud' << 'MUD'
+cat > "$OUT_DIR/pokemon_cls1025.mud" << 'MUD'
 type: classifier
 cvimodel: /root/models/pokemon_cls1025_int8.cvimodel
 input:
@@ -212,7 +203,12 @@ labels:
 MUD
 
 echo '🎉 Conversion finished in container.'
-"
+INSIDE
+
+"${RUNTIME_CMD[@]}" "bash /workspace/.tmp_two_stage_convert.sh"
+RC=$?
+rm -f ".tmp_two_stage_convert.sh" || true
+exit $RC
 
 echo ""
 echo "📁 Outputs in $OUT_DIR:"
