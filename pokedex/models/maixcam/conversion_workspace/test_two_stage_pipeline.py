@@ -37,6 +37,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--det-size", type=int, default=256, help="Detector input size")
     p.add_argument("--cls-size", type=int, default=224, help="Classifier input size")
     p.add_argument("--out-dir", type=str, default="runner_out_two_stage", help="model_runner outputs")
+    p.add_argument("--images", dest="images_opt", nargs="+", default=None,
+                   help="Image paths to test (optional; overrides positional list)")
     p.add_argument("images", nargs="*", default=[
         "images/0001_001.jpg",
         "images/0004_407.jpg",
@@ -208,7 +210,8 @@ def main() -> int:
     print(f"Classes:    {args.classes} ({len(class_names)})")
 
     ok = True
-    for img_path in args.images:
+    images_list = args.images_opt if args.images_opt else args.images
+    for img_path in images_list:
         print("\n== Test ==")
         print(f"📸 Image: {img_path}")
         if not os.path.exists(img_path):
