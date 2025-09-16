@@ -86,7 +86,7 @@ if [ "$RUN_MODE" = "udocker" ]; then
   udocker --allow-root create --name="$CONTAINER_NAME" "$DOCKER_IMAGE"
 
   echo "🐍 Running conversion in container (udocker)..."
-  RUNCMD=(udocker --allow-root run --env PYTHONUNBUFFERED=1 --volume="$(pwd)":/workspace "$CONTAINER_NAME" bash -lc)
+  RUNCMD=(udocker --allow-root run -e PYTHONUNBUFFERED=1 -v "$(pwd):/workspace" "$CONTAINER_NAME" bash -lc)
 else
   echo "🐳 Using Docker runtime"
   echo "📥 Pulling $DOCKER_IMAGE"
