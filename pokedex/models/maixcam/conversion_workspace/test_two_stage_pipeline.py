@@ -121,6 +121,7 @@ def find_packed_by_channels(outputs: dict, channels: int) -> Tuple[str, np.ndarr
 
 def det_infer_best_box(det_model: str, img_bgr: np.ndarray, det_size: int, out_dir: str) -> Tuple[Tuple[float, float, float, float], float]:
     # Prepare detector input
+    os.makedirs(out_dir, exist_ok=True)
     x_det = preprocess_nchw_rgb01(img_bgr, (det_size, det_size))
     in_npz = os.path.join(out_dir, "det_input.npz")
     np.savez(in_npz, images=x_det)
@@ -166,6 +167,7 @@ def crop_with_pad(img_bgr: np.ndarray, box_cxcywh: Tuple[float, float, float, fl
 
 
 def cls_infer_topk(cls_model: str, crop_bgr: np.ndarray, cls_size: int, out_dir: str, class_names: List[str], k: int = 5) -> List[Tuple[int, str, float]]:
+    os.makedirs(out_dir, exist_ok=True)
     x_cls = preprocess_nchw_rgb01(crop_bgr, (cls_size, cls_size))
     in_npz = os.path.join(out_dir, "cls_input.npz")
     np.savez(in_npz, images=x_cls)
