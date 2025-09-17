@@ -1,16 +1,14 @@
-type: yolo11
-cvimodel: /root/models/pokemon_det1_int8.cvimodel
-input:
-  format: rgb
-  width: 256
-  height: 256
-preprocess:
-  mean: [0.0, 0.0, 0.0]
-  scale: [0.003922, 0.003922, 0.003922]
-postprocess:
-  conf_threshold: 0.35
-  iou_threshold: 0.45
-labels:
-  num: 1
-  file: /root/models/pokemon_det1_labels.txt
+[basic]
+type = cvimodel
+model = /root/models/pokemon_det1_int8.cvimodel
+
+[extra]
+model_type = yolo11
+type = detector
+input_type = rgb
+mean = 0, 0, 0
+scale = 0.00392156862745098, 0.00392156862745098, 0.00392156862745098
+conf_threshold = 0.35
+iou_threshold = 0.45
+labels = pokemon
 
