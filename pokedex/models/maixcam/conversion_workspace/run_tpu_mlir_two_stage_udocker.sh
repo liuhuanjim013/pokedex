@@ -8,7 +8,7 @@ echo "========================================="
 # -------- Config (edit if needed) --------
 DOCKER_IMAGE="sophgo/tpuc_dev:latest"
 CONTAINER_NAME="tpu_mlir_two_stage"
-CHIP="cv180x"   # MaixCam CV181x family
+CHIP="k230"   # Default to K230 MaixCam family; set CHIP=cv180x to target CV18xx
 
 # Defaults use your latest run dirs; override via env or args if needed
 DET_ONNX_DEFAULT="runs/pokemon_det1_yolo11n_2565/weights/best.onnx"
@@ -188,7 +188,7 @@ postprocess:
   anchors: []
 labels:
   num: 1
-  names: ["pokemon"]
+  file: /root/models/pokemon_det1_labels.txt
 MUD
 
 cat > "$OUT_DIR/pokemon_cls1025.mud" << 'MUD'
