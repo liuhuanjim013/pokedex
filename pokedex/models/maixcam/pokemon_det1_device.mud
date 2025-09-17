@@ -1,5 +1,5 @@
 type: yolo11
-model: /root/models/pokemon_det1_int8.cvimodel
+cvimodel: /root/models/pokemon_det1_int8.cvimodel
 input:
   format: rgb
   width: 256
