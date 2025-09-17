@@ -37,6 +37,8 @@ CROP_PAD = 0.15
 AGREE_N = 3  # temporal smoothing: agree in last N frames
 MEAN = (0.0, 0.0, 0.0)
 SCALE = (1.0/255.0, 1.0/255.0, 1.0/255.0)
+COL_YELLOW = image.Color(255, 255, 0)
+COL_GREEN = image.Color(0, 255, 0)
 
 
 def load_classes(path: str):
@@ -266,7 +268,7 @@ def main():
         # Annotate and display
         label = f"{top1_name} {top1_p*100:.1f}%{' 🔒' if stable else ''}"
         y_text = 4
-        frame.draw_string(4, y_text, label, scale=1.0, color=(255, 255, 0))
+        frame.draw_string(4, y_text, label, COL_YELLOW, 1.0)
         if best_box is not None:
             # draw bbox (projected to original)
             cx, cy, bw, bh = best_box
@@ -274,7 +276,7 @@ def main():
             sy = H / float(DET_SIZE)
             cx *= sx; cy *= sy; bw *= sx; bh *= sy
             x1 = int(cx - bw / 2); y1 = int(cy - bh / 2)
-            frame.draw_rect(x1, y1, int(bw), int(bh), color=(0, 255, 0))
+            frame.draw_rect(x1, y1, int(bw), int(bh), COL_GREEN)
         disp.show(frame)
 
         # slight delay to keep UI responsive
