@@ -125,7 +125,7 @@ def main():
             print(f"⚠️ Detector load failed ({e}); direct load failed ({e2}). Using center-crop fallback.")
             det = None
 
-    # Load classifier (try high-level, fallback to generic)
+    # Load classifier (try high-level, fallback to generic, then direct cvimodel)
     cls = None
     cls_is_generic = False
     try:
@@ -134,8 +134,14 @@ def main():
         try:
             cls = nn.NN(CLS_MUD)
             cls_is_generic = True
-        except Exception as e:
-            raise SystemExit(f"Failed to load classifier: {e}")
+        except Exception:
+            # direct cvimodel
+            try:
+                cls = nn.NN("/root/models/pokemon_cls1025_int8.cvimodel")
+                cls_is_generic = True
+                print("ℹ️ Loaded classifier directly from cvimodel (MUD parse failed)")
+            except Exception as e:
+                raise SystemExit(f"Failed to load classifier: {e}")
 
     recent = []  # temporal smoothing buffer of class ids
 
