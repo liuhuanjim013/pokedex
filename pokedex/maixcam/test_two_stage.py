@@ -35,6 +35,8 @@ DET_CONF = 0.35
 DET_IOU = 0.45
 CROP_PAD = 0.15
 AGREE_N = 3  # temporal smoothing: agree in last N frames
+MEAN = (0.0, 0.0, 0.0)
+SCALE = (1.0/255.0, 1.0/255.0, 1.0/255.0)
 
 
 def load_classes(path: str):
@@ -154,12 +156,21 @@ def main():
             # Generic forward decode
             if best_box is None:
                 try:
-                    out = det.forward_image(frame_det)
-                    try:
-                        vals = out.to_float_list()
-                    except Exception:
-                        vals = out.to_list()
-                    if not isinstance(vals, list) or len(vals) < 5:
+                    out = det.forward_image(frame_det, mean=MEAN, scale=SCALE)
+                    # Find a tensor whose length is multiple of 5 (cx,cy,w,h,score)*P
+                    vals = None
+                    chosen = None
+                    for k in out.keys():
+                        t = out[k]
+                        try:
+                            arr = t.to_float_list()
+                        except Exception:
+                            continue
+                        if isinstance(arr, list) and len(arr) >= 5 and (len(arr) % 5) == 0:
+                            vals = arr
+                            chosen = k
+                            break
+                    if vals is None:
                         raise RuntimeError('detector output invalid')
                     ch = 5
                     P = len(vals) // ch
@@ -204,7 +215,6 @@ def main():
         try:
             if not cls_is_generic:
                 results = cls.classify(crop)  # expect list of (id, prob) or objects
-                # normalize to (id, prob)
                 parsed = []
                 for r in results or []:
                     cid = getattr(r, "id", None)
@@ -216,17 +226,24 @@ def main():
                 if parsed:
                     top1_id, top1_p = max(parsed, key=lambda x: x[1])
             else:
-                # Generic NN: forward_image -> logits
-                logits = cls.forward_image(crop)
-                # try to_float_list()
-                try:
-                    logits = logits.to_float_list()
-                except Exception:
-                    # fallback: to_list()
-                    logits = logits.to_list()
-                probs = softmax([float(v) for v in logits])
-                top1_id = max(range(len(probs)), key=lambda i: probs[i])
-                top1_p = probs[top1_id]
+                # Generic NN: forward_image -> Tensors (use key)
+                outs = cls.forward_image(crop, mean=MEAN, scale=SCALE)
+                name = None
+                keys = outs.keys()
+                name = keys[0] if keys else None
+                if name is None:
+                    raise RuntimeError('classifier output empty')
+                vec = outs[name]
+                # to_float_list for Tensor
+                arr = vec.to_float_list() if hasattr(vec, 'to_float_list') else []
+                if not arr:
+                    raise RuntimeError('classifier tensor conversion failed')
+                if 'softmax' in name.lower():
+                    probs = [float(v) for v in arr]
+                else:
+                    probs = softmax([float(v) for v in arr])
+                top1_id = int(max(range(len(probs)), key=lambda i: probs[i]))
+                top1_p = float(probs[top1_id])
         except Exception:
             # robust fallback
             top1_id, top1_p = (0, 0.0)
