@@ -23,7 +23,7 @@ except Exception as e:
 
 
 # Paths on device
-DET_MUD = "/root/models/pokemon_det1.mud"
+DET_MUD = "/root/models/pokemon_det1_device.mud"
 CLS_MUD = "/root/models/pokemon_cls1025.mud"
 CLASSES_TXT = "/root/models/classes.txt"
 
