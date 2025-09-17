@@ -103,9 +103,13 @@ def main():
 
     # Load detector (generic NN; some firmware lacks nn.YOLO)
     try:
-        det = nn.NN(DET_MUD)
+        if hasattr(nn, 'YOLO'):
+            det = nn.YOLO(DET_MUD)
+        else:
+            det = nn.NN(DET_MUD)
     except Exception as e:
-        raise SystemExit(f"Failed to load detector: {e}")
+        print(f"⚠️ Detector load failed ({e}). Falling back to center-crop classifier.")
+        det = None
 
     # Load classifier (try high-level, fallback to generic)
     cls = None
@@ -125,48 +129,43 @@ def main():
         frame = cam.read()
         W, H = frame.width(), frame.height()
 
-        # Detector inference (resize to DET_SIZE if needed)
-        frame_det = frame.resize(DET_SIZE, DET_SIZE)
-        # Try high-level YOLO API if available, else generic decode
+        # Detector inference (if loaded)
         best_box, best_score = None, 0.0
-        try:
-            # Some firmware may expose nn.YOLO; skip if not present
-            if hasattr(nn, 'YOLO'):
-                # If det is YOLO instance
-                try:
-                    best_box, best_score = get_best_box_yolo(det, frame_det)
-                except Exception:
-                    best_box, best_score = None, 0.0
-        except Exception:
-            pass
-        if best_box is None:
-            # Generic detector decode: forward_image -> flat [cx,cy,w,h,score] * P
+        if det is not None:
+            frame_det = frame.resize(DET_SIZE, DET_SIZE)
+            # Try YOLO wrapper first
             try:
-                out = det.forward_image(frame_det)
-                try:
-                    vals = out.to_float_list()
-                except Exception:
-                    vals = out.to_list()
-                if not isinstance(vals, list) or len(vals) < 5:
-                    raise RuntimeError('detector output invalid')
-                ch = 5
-                P = len(vals) // ch
-                # Find best position by sigmoid(score)
-                best_i = 0
-                best_s = -1.0
-                for i in range(P):
-                    s = vals[i*ch + 4]
-                    s = 1.0 / (1.0 + math.exp(-max(min(s, 500.0), -500.0)))
-                    if s > best_s:
-                        best_s = s
-                        best_i = i
-                cx = vals[best_i*ch + 0]
-                cy = vals[best_i*ch + 1]
-                bw = vals[best_i*ch + 2]
-                bh = vals[best_i*ch + 3]
-                best_box, best_score = (float(cx), float(cy), float(bw), float(bh)), float(best_s)
+                if hasattr(det, 'detect'):
+                    best_box, best_score = get_best_box_yolo(det, frame_det)
             except Exception:
                 best_box, best_score = None, 0.0
+            # Generic forward decode
+            if best_box is None:
+                try:
+                    out = det.forward_image(frame_det)
+                    try:
+                        vals = out.to_float_list()
+                    except Exception:
+                        vals = out.to_list()
+                    if not isinstance(vals, list) or len(vals) < 5:
+                        raise RuntimeError('detector output invalid')
+                    ch = 5
+                    P = len(vals) // ch
+                    best_i = 0
+                    best_s = -1.0
+                    for i in range(P):
+                        s = vals[i*ch + 4]
+                        s = 1.0 / (1.0 + math.exp(-max(min(s, 500.0), -500.0)))
+                        if s > best_s:
+                            best_s = s
+                            best_i = i
+                    cx = vals[best_i*ch + 0]
+                    cy = vals[best_i*ch + 1]
+                    bw = vals[best_i*ch + 2]
+                    bh = vals[best_i*ch + 3]
+                    best_box, best_score = (float(cx), float(cy), float(bw), float(bh)), float(best_s)
+                except Exception:
+                    best_box, best_score = None, 0.0
 
         if best_box is None:
             # center crop fallback

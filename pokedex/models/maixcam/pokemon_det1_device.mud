@@ -12,5 +12,5 @@ postprocess:
   iou_threshold: 0.45
 labels:
   num: 1
-  names: ["pokemon"]
+  file: /root/models/pokemon_det1_labels.txt
 
