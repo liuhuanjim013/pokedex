@@ -1,0 +1,7 @@
+path: data/yolo_dataset
+train: train/images
+val: validation/images
+test: test/images
+names: ["pokemon"]
+nc: 1
+

@@ -2124,6 +2124,147 @@ python scripts/yolo/export_maixcam.py --detector detector.onnx --classifier clas
 - **Augmentation**: Add camera-specific augmentations (lighting, angles, distances)
 - **Validation**: Test with real Pokemon cards/toys in various lighting conditions
 
+### Two-Stage YOLO11n Quickstart (Detector + Classifier)
+
+Use this clean, Colab-ready path to retrain a fast, memory-safe two-stage pipeline on Maix Cam. Reuse your existing dataset/splits and TPU-MLIR flow.
+
+1) Detector (1 class, YOLO11n @256)
+
+Create 1-class YAML at `configs/yolov11/pokemon_det1.yaml`:
+
+```yaml
+path: data/yolo_dataset
+train: images/train
+val: images/validation
+test: images/test
+names: ["pokemon"]
+nc: 1
+```
+
+Train and export (Ultralytics ≥8.2, YOLOv11):
+
+```bash
+# pip install ultralytics==8.3.0 onnx onnxsim
+yolo detect train model=yolo11n.pt data=configs/yolov11/pokemon_det1.yaml imgsz=256 epochs=80 batch=32 cos_lr=True
+yolo export model=runs/detect/train/weights/best.pt format=onnx opset=12 imgsz=256 dynamic=False simplify=True
+```
+
+2) Classifier (1025 classes, YOLO11n-cls @224)
+
+Folder structure:
+
+```
+dataset/
+  train/0001_bulbasaur/xxx.jpg
+  ...
+  val/0025_pikachu/yyy.jpg
+```
+
+Train and export:
+
+```bash
+yolo classify train model=yolo11n-cls.pt data=dataset imgsz=224 epochs=80 batch=64 cos_lr=True
+yolo export model=runs/classify/train/weights/best.pt format=onnx opset=12 imgsz=224 dynamic=False simplify=True
+```
+
+Optional: If you already have a YOLO11m classifier, export it and try first by replacing `yolo11n-cls.pt` with your `best.pt` path.
+
+3) INT8 compile (TPU-MLIR, CV181x)
+
+Prepare 200–400 calibration images matching inference distribution.
+
+```bash
+# DETECTOR
+python -m tpu_mlir.tools.model_transform \
+  --model_name pokemon_det1 \
+  --model_def best_det.onnx \
+  --input_shapes [[1,3,256,256]] \
+  --keep_input_fp32 \
+  --test_input data/calib_det_list.txt \
+  --mlir pokemon_det1.mlir
+
+python -m tpu_mlir.tools.run_calibration \
+  --mlir pokemon_det1.mlir \
+  --dataset data/calib_det/ \
+  --input_num 256 \
+  --calibration_table pokemon_det1_cali_table
+
+python -m tpu_mlir.tools.model_deploy \
+  --mlir pokemon_det1.mlir \
+  --quant_input \
+  --calibration_table pokemon_det1_cali_table \
+  --chip cv180x \
+  --model pokemon_det1_int8.cvimodel
+
+# CLASSIFIER
+python -m tpu_mlir.tools.model_transform \
+  --model_name pokemon_cls1025 \
+  --model_def best_cls.onnx \
+  --input_shapes [[1,3,224,224]] \
+  --keep_input_fp32 \
+  --test_input data/calib_cls_list.txt \
+  --mlir pokemon_cls1025.mlir
+
+python -m tpu_mlir.tools.run_calibration \
+  --mlir pokemon_cls1025.mlir \
+  --dataset data/calib_cls/ \
+  --input_num 256 \
+  --calibration_table pokemon_cls1025_cali_table
+
+python -m tpu_mlir.tools.model_deploy \
+  --mlir pokemon_cls1025.mlir \
+  --quant_input \
+  --calibration_table pokemon_cls1025_cali_table \
+  --chip cv180x \
+  --model pokemon_cls1025_int8.cvimodel
+```
+
+4) Minimal MUDs
+
+Detector `pokemon_det1.mud`:
+
+```yaml
+type: yolo11
+cvimodel: /root/models/pokemon_det1_int8.cvimodel
+input:
+  format: rgb
+  width: 256
+  height: 256
+preprocess:
+  mean: [0.0, 0.0, 0.0]
+  scale: [0.003922, 0.003922, 0.003922]
+postprocess:
+  conf_threshold: 0.35
+  iou_threshold: 0.45
+  anchors: []
+labels:
+  num: 1
+  names: ["pokemon"]
+```
+
+Classifier `pokemon_cls1025.mud`:
+
+```yaml
+type: classifier
+cvimodel: /root/models/pokemon_cls1025_int8.cvimodel
+input:
+  format: rgb
+  width: 224
+  height: 224
+preprocess:
+  mean: [0.0, 0.0, 0.0]
+  scale: [0.003922, 0.003922, 0.003922]
+labels:
+  num: 1025
+  file: /root/models/classes.txt
+```
+
+5) Deployment
+
+Place both `.cvimodel` and `.mud` files under `/root/models/`, plus `classes.txt` (1025 lines). Use the two-stage loop: detector → crop (+15% pad) → classifier; start with det_conf=0.35, det_iou=0.45, agree_n=3.
+
+Expected on MaixCam/CV18xx: detector 15+ FPS, classifier 25+ FPS single crop, end-to-end 10–20 FPS with RAM well below ~90MB.
+
 ### Complete PokedexRunner Implementation (READY TO USE)
 
 **Script**: Complete Python implementation provided for immediate deployment
