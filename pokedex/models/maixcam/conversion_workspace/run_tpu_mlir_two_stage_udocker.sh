@@ -8,7 +8,7 @@ echo "========================================="
 # -------- Config (edit if needed) --------
 DOCKER_IMAGE="sophgo/tpuc_dev:latest"
 CONTAINER_NAME="tpu_mlir_two_stage"
-CHIP="k230"   # Default to K230 MaixCam family; set CHIP=cv180x to target CV18xx
+CHIP="cv181x"   # Default target per MaixCam doc; override with CHIP env if needed
 
 # Defaults use your latest run dirs; override via env or args if needed
 DET_ONNX_DEFAULT="runs/pokemon_det1_yolo11n_2565/weights/best.onnx"
