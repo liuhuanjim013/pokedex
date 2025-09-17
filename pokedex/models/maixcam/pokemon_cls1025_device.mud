@@ -1,5 +1,5 @@
 type: classifier
-model: /root/models/pokemon_cls1025_int8.cvimodel
+cvimodel: /root/models/pokemon_cls1025_int8.cvimodel
 input:
   format: rgb
   width: 224

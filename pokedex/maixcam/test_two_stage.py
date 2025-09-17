@@ -103,13 +103,25 @@ def main():
 
     # Load detector (generic NN; some firmware lacks nn.YOLO)
     try:
-        if hasattr(nn, 'YOLO'):
+        if hasattr(nn, 'YOLO11'):
+            det = nn.YOLO11(DET_MUD)
+        elif hasattr(nn, 'YOLO'):
             det = nn.YOLO(DET_MUD)
         else:
             det = nn.NN(DET_MUD)
     except Exception as e:
-        print(f"⚠️ Detector load failed ({e}). Falling back to center-crop classifier.")
-        det = None
+        # Try direct cvimodel load as probe
+        try:
+            if hasattr(nn, 'YOLO11'):
+                det = nn.YOLO11("/root/models/pokemon_det1_int8.cvimodel")
+            elif hasattr(nn, 'YOLO'):
+                det = nn.YOLO("/root/models/pokemon_det1_int8.cvimodel")
+            else:
+                det = nn.NN("/root/models/pokemon_det1_int8.cvimodel")
+            print("ℹ️ Loaded detector directly from cvimodel (MUD parse failed)")
+        except Exception as e2:
+            print(f"⚠️ Detector load failed ({e}); direct load failed ({e2}). Using center-crop fallback.")
+            det = None
 
     # Load classifier (try high-level, fallback to generic)
     cls = None
