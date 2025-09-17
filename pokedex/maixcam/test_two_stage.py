@@ -101,10 +101,9 @@ def main():
     cam = camera.Camera(640, 480)
     disp = display.Display()
 
-    # Load detector
-    det = None
+    # Load detector (generic NN; some firmware lacks nn.YOLO)
     try:
-        det = nn.YOLO(DET_MUD)
+        det = nn.NN(DET_MUD)
     except Exception as e:
         raise SystemExit(f"Failed to load detector: {e}")
 
@@ -128,7 +127,46 @@ def main():
 
         # Detector inference (resize to DET_SIZE if needed)
         frame_det = frame.resize(DET_SIZE, DET_SIZE)
-        best_box, best_score = get_best_box_yolo(det, frame_det)
+        # Try high-level YOLO API if available, else generic decode
+        best_box, best_score = None, 0.0
+        try:
+            # Some firmware may expose nn.YOLO; skip if not present
+            if hasattr(nn, 'YOLO'):
+                # If det is YOLO instance
+                try:
+                    best_box, best_score = get_best_box_yolo(det, frame_det)
+                except Exception:
+                    best_box, best_score = None, 0.0
+        except Exception:
+            pass
+        if best_box is None:
+            # Generic detector decode: forward_image -> flat [cx,cy,w,h,score] * P
+            try:
+                out = det.forward_image(frame_det)
+                try:
+                    vals = out.to_float_list()
+                except Exception:
+                    vals = out.to_list()
+                if not isinstance(vals, list) or len(vals) < 5:
+                    raise RuntimeError('detector output invalid')
+                ch = 5
+                P = len(vals) // ch
+                # Find best position by sigmoid(score)
+                best_i = 0
+                best_s = -1.0
+                for i in range(P):
+                    s = vals[i*ch + 4]
+                    s = 1.0 / (1.0 + math.exp(-max(min(s, 500.0), -500.0)))
+                    if s > best_s:
+                        best_s = s
+                        best_i = i
+                cx = vals[best_i*ch + 0]
+                cy = vals[best_i*ch + 1]
+                bw = vals[best_i*ch + 2]
+                bh = vals[best_i*ch + 3]
+                best_box, best_score = (float(cx), float(cy), float(bw), float(bh)), float(best_s)
+            except Exception:
+                best_box, best_score = None, 0.0
 
         if best_box is None:
             # center crop fallback
