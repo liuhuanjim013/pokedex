@@ -5,9 +5,10 @@ MaixCam Two-Stage Test (Detector + Classifier)
 Requirements on device:
 - Copy to /root (or run from project dir mounted)
 - Models in /root/models/:
-  - pokemon_det1_int8.cvimodel, pokemon_det1.mud
-  - pokemon_cls1025_int8.cvimodel, pokemon_cls1025.mud
+  - pokemon_det1_int8.cvimodel
+  - pokemon_cls1025_int8.cvimodel
   - classes.txt (1025 lines)
+  - (MUD files optional; not used)
 
 Controls:
 - Press Ctrl+C to exit
@@ -23,8 +24,8 @@ except Exception as e:
 
 
 # Paths on device
-DET_MUD = "/root/models/pokemon_det1_device.mud"
-CLS_MUD = "/root/models/pokemon_cls1025.mud"
+DET_MODEL = "/root/models/pokemon_det1_int8.cvimodel"
+CLS_MODEL = "/root/models/pokemon_cls1025_int8.cvimodel"
 CLASSES_TXT = "/root/models/classes.txt"
 
 
@@ -39,6 +40,8 @@ MEAN = (0.0, 0.0, 0.0)
 SCALE = (1.0/255.0, 1.0/255.0, 1.0/255.0)
 COL_YELLOW = image.Color(255, 255, 0)
 COL_GREEN = image.Color(0, 255, 0)
+COL_BLACK = image.Color(0, 0, 0)
+TEXT_SCALE = 1.6
 
 
 def load_classes(path: str):
@@ -50,11 +53,9 @@ def load_classes(path: str):
         return [f"id_{i}" for i in range(1025)]
 
 
-def softmax(logits):
-    m = max(logits)
-    exps = [math.exp(x - m) for x in logits]
-    s = sum(exps)
-    return [x / s for x in exps]
+def sigmoid(x: float) -> float:
+    x = max(min(x, 500.0), -500.0)
+    return 1.0 / (1.0 + math.exp(-x))
 
 
 def pad_and_clip(x, y, w, h, pad, W, H):
@@ -105,45 +106,37 @@ def main():
     cam = camera.Camera(640, 480)
     disp = display.Display()
 
-    # Load detector (generic NN; some firmware lacks nn.YOLO)
+    # Load detector (always from cvimodel; MUD parsing unreliable on device)
+    det = None
     try:
         if hasattr(nn, 'YOLO11'):
-            det = nn.YOLO11(DET_MUD)
+            det = nn.YOLO11(DET_MODEL)
         elif hasattr(nn, 'YOLO'):
-            det = nn.YOLO(DET_MUD)
+            det = nn.YOLO(DET_MODEL)
         else:
-            det = nn.NN(DET_MUD)
-    except Exception as e:
-        # Try direct cvimodel load as probe
-        try:
-            if hasattr(nn, 'YOLO11'):
-                det = nn.YOLO11("/root/models/pokemon_det1_int8.cvimodel")
-            elif hasattr(nn, 'YOLO'):
-                det = nn.YOLO("/root/models/pokemon_det1_int8.cvimodel")
-            else:
-                det = nn.NN("/root/models/pokemon_det1_int8.cvimodel")
-            print("ℹ️ Loaded detector directly from cvimodel (MUD parse failed)")
-        except Exception as e2:
-            print(f"⚠️ Detector load failed ({e}); direct load failed ({e2}). Using center-crop fallback.")
-            det = None
+            det = nn.NN(DET_MODEL)
+        print("ℹ️ Loaded detector from cvimodel")
+    except Exception as e2:
+        print(f"⚠️ Detector cvimodel load failed: {e2}. Using center-crop fallback.")
+        det = None
 
-    # Load classifier (try high-level, fallback to generic, then direct cvimodel)
+    # Load classifier (always from cvimodel)
     cls = None
-    cls_is_generic = False
+    cls_is_generic = True
     try:
-        cls = nn.Classifier(CLS_MUD)
-    except Exception:
-        try:
-            cls = nn.NN(CLS_MUD)
-            cls_is_generic = True
-        except Exception:
-            # direct cvimodel
+        if hasattr(nn, 'Classifier'):
             try:
-                cls = nn.NN("/root/models/pokemon_cls1025_int8.cvimodel")
+                cls = nn.Classifier(CLS_MODEL)
+                cls_is_generic = False
+            except Exception:
+                cls = nn.NN(CLS_MODEL)
                 cls_is_generic = True
-                print("ℹ️ Loaded classifier directly from cvimodel (MUD parse failed)")
-            except Exception as e:
-                raise SystemExit(f"Failed to load classifier: {e}")
+        else:
+            cls = nn.NN(CLS_MODEL)
+            cls_is_generic = True
+        print("ℹ️ Loaded classifier from cvimodel")
+    except Exception as e:
+        raise SystemExit(f"Failed to load classifier: {e}")
 
     recent = []  # temporal smoothing buffer of class ids
 
@@ -246,10 +239,8 @@ def main():
                 arr = vec.to_float_list() if hasattr(vec, 'to_float_list') else []
                 if not arr:
                     raise RuntimeError('classifier tensor conversion failed')
-                if 'softmax' in name.lower():
-                    probs = [float(v) for v in arr]
-                else:
-                    probs = softmax([float(v) for v in arr])
+                # Use sigmoid per-class (YOLO-style multi-label head)
+                probs = [sigmoid(float(v)) for v in arr]
                 top1_id = int(max(range(len(probs)), key=lambda i: probs[i]))
                 top1_p = float(probs[top1_id])
         except Exception:
@@ -266,9 +257,13 @@ def main():
             top1_name = names[top1_id]
 
         # Annotate and display
-        label = f"{top1_name} {top1_p*100:.1f}%{' 🔒' if stable else ''}"
-        y_text = 4
-        frame.draw_string(4, y_text, label, COL_YELLOW, 1.0)
+        label = f"{top1_name} {top1_p*100:.1f}%{' [stable]' if stable else ''}"
+        x_text = 6
+        y_text = 6
+        # Draw text outline (shadow) for better visibility
+        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, -1), (-1, 1), (1, 1)):
+            frame.draw_string(x_text + dx, y_text + dy, label, COL_BLACK, TEXT_SCALE)
+        frame.draw_string(x_text, y_text, label, COL_YELLOW, TEXT_SCALE)
         if best_box is not None:
             # draw bbox (projected to original)
             cx, cy, bw, bh = best_box

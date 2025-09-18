@@ -123,8 +123,10 @@ pokedex/                         # Main project directory
 │   │   ├── setup_colab_training.py # Colab environment setup
 │   │   ├── train_yolov3_baseline.py # Baseline training script (legacy)
 │   │   ├── train_yolov3_improved.py # Improved training script (legacy)
+│   │   ├── train_yolov5n_k210.py # YOLOv5n training for K210 (primary)
 │   │   ├── train_yolov8_maixcam.py # YOLOv8 training for Maix Cam (alternative)
 │   │   ├── train_yolov11_maixcam.py # YOLOv11 training for Maix Cam (primary)
+│   │   ├── export_k210.py     # K210 export script
 │   │   ├── export_maixcam.py   # Maix Cam export script
 │   │   ├── resume_training.py  # Resume from checkpoint script
 │   │   └── evaluate_model.py   # Evaluation script for trained models
@@ -155,6 +157,9 @@ pokedex/                         # Main project directory
 │   │   ├── maixcam_data.yaml   # Maix Cam data configuration
 │   │   ├── maixcam_model.yaml  # Maix Cam model configuration
 │   │   └── maixcam_training.yaml # Maix Cam training configuration
+│   ├── yolov5n/              # YOLOv5n K210 configurations
+│   │   ├── yolov5n_k210_data.yaml
+│   │   └── yolov5n_k210_optimized.yaml
 │   ├── clip/                # CLIP configurations
 │   ├── smolvm/              # SMoLVM configurations
 │   └── hybrid/              # Hybrid configurations
@@ -267,7 +272,7 @@ git_config = {
 
 ## 3. Model Architecture
 
-### Model Evolution: YOLOv3 → YOLOv8 (Maix Cam Upgrade)
+### Model Evolution: YOLOv3 → YOLOv11 (Maix Cam Upgrade)
 
 #### YOLOv3 Baseline (LEGACY - K210)
 1. **Architecture**:
@@ -318,7 +323,7 @@ git_config = {
 |-------|------------|--------|------------|-----------------|--------|
 | YOLOv3 | 61.9M | 65.2 | 416x416 | General | Baseline |
 | YOLOv3-tiny | 12.66M | 20.1 | 224x224 | K210 | ✅ Trained (91.7%) |
-| YOLOv5n | 1.9M | 4.5 | 224x224 | K210 | 🔄 In Progress |
+| YOLOv5n | 1.9M | 4.5 | 224x224 | K210 | ✅ Implemented |
 | YOLOv8n | 3.2M | 8.7 | 256x256 | Maix Cam | Alternative |
 | YOLOv8m | ~20M | ~50 | 256x256 | Maix Cam | Alternative |
 | **YOLOv11m** | **~20M** | **~50** | **256x256** | **Maix Cam** | **🎯 PRIMARY TARGET** |
@@ -412,6 +417,7 @@ git_config = {
    - Progress tracking with visual feedback
    - Error handling for I/O issues (Google Drive)
    - Dynamic configuration updates
+   - Maix Cam aware backups: include `runs/`, `models/maixcam/`, `pokemon-classifier-maixcam/`
 
 ### Testing Strategy
 1. **Unit Tests**:
@@ -474,8 +480,8 @@ git_config = {
 7. **Class Balancing**: Class-balanced sampling for 1025 classes
 
 #### Maix Cam Export Pipeline (✅ COMPLETED - TPU-MLIR Conversion)
-1. **Primary Format**: ONNX (directly supported by TPU-MLIR)
-2. **Converter**: TPU-MLIR v1.21.1 (replaces problematic nncase)
+1. **Primary Format**: ONNX (directly supported by TPU-MLIR and MaixCam converter)
+2. **Converter**: TPU-MLIR v1.21.1 (modern, no nncase conflicts)
 3. **Advanced Calibration**: 15,000 images (15x more than typical 1,000)
 4. **INT8 Quantization**: Superior quantization with massive calibration dataset
 5. **Hardware Optimization**: CV181x chip compatibility
@@ -1092,9 +1098,9 @@ class_logits = detection_output[:1025, :]  # Shape: [1025, 1344]
 max_confidences = np.max(class_logits, axis=0)  # Shape: [1344]
 best_box_idx = np.argmax(max_confidences)
 
-# Get class probabilities for the best box
+# Get class confidence for the best box (use SIGMOID, not softmax)
 best_box_logits = class_logits[:, best_box_idx]  # Shape: [1025]
-class_probs = softmax(best_box_logits)
+class_probs = 1.0 / (1.0 + np.exp(-best_box_logits))
 predicted_class = np.argmax(class_probs)
 ```
 
@@ -1119,9 +1125,9 @@ class_logits = detection_output_transposed[:, 4:1029]  # Shape: [1344, 1025]
 max_logits = np.max(class_logits, axis=1)  # Shape: [1344]
 best_box_idx = np.argmax(max_logits)
 
-# Get class probabilities for the best box
+# Get class confidence for the best box (use SIGMOID, not softmax)
 best_box_logits = class_logits[best_box_idx, :]  # Shape: [1025]
-class_probs = softmax(best_box_logits)
+class_probs = 1.0 / (1.0 + np.exp(-best_box_logits))
 predicted_class = np.argmax(class_probs)
 ```
 
