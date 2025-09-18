@@ -257,7 +257,7 @@ def main():
             top1_name = names[top1_id]
 
         # Annotate and display
-        label = f"{top1_name} {top1_p*100:.1f}%{' 🔒' if stable else ''}"
+        label = f"{top1_name} {top1_p*100:.1f}%{' [stable]' if stable else ''}"
         x_text = 6
         y_text = 6
         # Draw text outline (shadow) for better visibility
