@@ -40,6 +40,8 @@ MEAN = (0.0, 0.0, 0.0)
 SCALE = (1.0/255.0, 1.0/255.0, 1.0/255.0)
 COL_YELLOW = image.Color(255, 255, 0)
 COL_GREEN = image.Color(0, 255, 0)
+COL_BLACK = image.Color(0, 0, 0)
+TEXT_SCALE = 1.6
 
 
 def load_classes(path: str):
@@ -256,8 +258,12 @@ def main():
 
         # Annotate and display
         label = f"{top1_name} {top1_p*100:.1f}%{' 🔒' if stable else ''}"
-        y_text = 4
-        frame.draw_string(4, y_text, label, COL_YELLOW, 1.0)
+        x_text = 6
+        y_text = 6
+        # Draw text outline (shadow) for better visibility
+        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, -1), (-1, 1), (1, 1)):
+            frame.draw_string(x_text + dx, y_text + dy, label, COL_BLACK, TEXT_SCALE)
+        frame.draw_string(x_text, y_text, label, COL_YELLOW, TEXT_SCALE)
         if best_box is not None:
             # draw bbox (projected to original)
             cx, cy, bw, bh = best_box
