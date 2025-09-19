@@ -15,6 +15,7 @@ Controls:
 """
 
 import math
+import os
 import time
 
 try:
@@ -185,8 +186,9 @@ def main():
     cam = camera.Camera(640, 480)
     disp = display.Display()
 
-    # Load detector via MUD with YOLO wrapper first, then fallback
+    # Load detector via MUD with YOLO wrapper first, then try auto-generated MUD variants, then fallback
     det = None
+    # 1) Try provided MUD path first
     try:
         if hasattr(nn, 'YOLO11'):
             det = nn.YOLO11(DET_MUD)
@@ -194,10 +196,54 @@ def main():
         elif hasattr(nn, 'YOLO'):
             det = nn.YOLO(DET_MUD)
             print("ℹ️ Loaded detector via YOLO(mud)")
-        else:
-            raise RuntimeError("YOLO wrapper not available on device")
-    except Exception as e_mud:
-        print(f"⚠️ Detector MUD load failed: {e_mud}. Falling back to NN(cvimodel).")
+    except Exception as e_mud_first:
+        print(f"⚠️ Detector MUD load failed: {e_mud_first}")
+
+    # 2) Try auto-generated MUD schema variants
+    if det is None and (hasattr(nn, 'YOLO11') or hasattr(nn, 'YOLO')):
+        auto_mud = "/root/models/pokemon_det1_auto.mud"
+        variants = []
+        cvip = DET_MODEL
+        # Minimal variants first
+        variants.append(("model_type+yolo11+model(min)", f"model_type: yolo11\nmodel: {cvip}\n"))
+        variants.append(("model_type+yolo11+model+class_names", f"model_type: yolo11\nmodel: {cvip}\nclass_names: [\"pokemon\"]\n"))
+        variants.append(("model_type+yolo+model+class_names", f"model_type: yolo\nmodel: {cvip}\nclass_names: [\"pokemon\"]\n"))
+        # With input/preprocess
+        common_ip = ("input:\n  format: rgb\n  width: 256\n  height: 256\n"
+                     "preprocess:\n  mean: [0.0, 0.0, 0.0]\n  scale: [0.003922, 0.003922, 0.003922]\n")
+        variants.append(("type+yolo11+cvimodel+ip+labels", f"type: yolo11\ncvimodel: {cvip}\n{common_ip}labels:\n  num: 1\n  names: [\"pokemon\"]\n"))
+        variants.append(("type+yolo+cvimodel+ip+labels", f"type: yolo\ncvimodel: {cvip}\n{common_ip}labels:\n  num: 1\n  names: [\"pokemon\"]\n"))
+        variants.append(("model_type+yolo11+model+ip+class_names", f"model_type: yolo11\nmodel: {cvip}\n{common_ip}class_names: [\"pokemon\"]\n"))
+
+        for vname, vtext in variants:
+            try:
+                with open(auto_mud, "w", encoding="utf-8") as f:
+                    f.write(vtext)
+                # Ensure permissions and LF endings
+                try:
+                    os.chmod(auto_mud, 0o644)
+                except Exception:
+                    pass
+                # Try load
+                if hasattr(nn, 'YOLO11'):
+                    det = nn.YOLO11(auto_mud)
+                    print(f"ℹ️ Loaded detector via YOLO11(auto mud: {vname})")
+                    break
+                elif hasattr(nn, 'YOLO'):
+                    det = nn.YOLO(auto_mud)
+                    print(f"ℹ️ Loaded detector via YOLO(auto mud: {vname})")
+                    break
+            except Exception as e_var:
+                print(f"⚠️ Auto MUD variant failed ({vname}): {e_var}")
+        # Cleanup temp mud if not successfully loaded
+        if det is None:
+            try:
+                os.remove(auto_mud)
+            except Exception:
+                pass
+
+    # 3) Fallback to NN(cvimodel)
+    if det is None:
         try:
             det = nn.NN(DET_MODEL)
             print("ℹ️ Loaded detector via NN(cvimodel)")
