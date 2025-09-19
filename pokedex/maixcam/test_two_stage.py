@@ -45,6 +45,7 @@ COL_GREEN = image.Color(0, 255, 0)
 COL_BLACK = image.Color(0, 0, 0)
 COL_RED = image.Color(255, 0, 0)
 TEXT_SCALE = 1.6
+DET_LOCK_THRESH = 0.52  # require >0.52 to update from baseline 0.5
 
 
 def load_classes(path: str):
@@ -197,6 +198,7 @@ def main():
         raise SystemExit(f"Failed to load classifier: {e}")
 
     recent = []  # temporal smoothing buffer of class ids
+    last_good_det = None  # persist last good detector box in det-scale
 
     while True:
         frame = cam.read()
@@ -262,8 +264,18 @@ def main():
                     cy = cy_all[best_i]
                     bw = w_all[best_i]
                     bh = h_all[best_i]
-                    best_box, best_score = (float(cx), float(cy), float(bw), float(bh)), float(best_s)
-                    print(f"[det] best_i={best_i}/{P} score={best_s:.3f}")
+                    cur_box = (float(cx), float(cy), float(bw), float(bh))
+                    cur_score = float(best_s)
+                    # Locking logic: ignore baseline 0.5 unless never locked or significantly better
+                    if cur_score > DET_LOCK_THRESH:
+                        last_good_det = cur_box
+                        best_box, best_score = cur_box, cur_score
+                    elif last_good_det is not None:
+                        best_box, best_score = last_good_det, cur_score
+                        print(f"[det] using last_good_det (score={cur_score:.3f} < {DET_LOCK_THRESH})")
+                    else:
+                        best_box, best_score = cur_box, cur_score
+                    print(f"[det] best_i={best_i}/{P} score={cur_score:.3f}")
                 except Exception:
                     best_box, best_score = None, 0.0
             # Debug: print chosen detection in detector scale
