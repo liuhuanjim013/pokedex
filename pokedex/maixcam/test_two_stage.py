@@ -185,14 +185,25 @@ def main():
     cam = camera.Camera(640, 480)
     disp = display.Display()
 
-    # Load detector using working backend only (nn.NN with cvimodel)
+    # Load detector via MUD with YOLO wrapper first, then fallback
     det = None
     try:
-        det = nn.NN(DET_MODEL)
-        print("ℹ️ Loaded detector via NN(cvimodel)")
-    except Exception as e2:
-        print(f"⚠️ Detector cvimodel load failed: {e2}. Using center-crop fallback.")
-        det = None
+        if hasattr(nn, 'YOLO11'):
+            det = nn.YOLO11(DET_MUD)
+            print("ℹ️ Loaded detector via YOLO11(mud)")
+        elif hasattr(nn, 'YOLO'):
+            det = nn.YOLO(DET_MUD)
+            print("ℹ️ Loaded detector via YOLO(mud)")
+        else:
+            raise RuntimeError("YOLO wrapper not available on device")
+    except Exception as e_mud:
+        print(f"⚠️ Detector MUD load failed: {e_mud}. Falling back to NN(cvimodel).")
+        try:
+            det = nn.NN(DET_MODEL)
+            print("ℹ️ Loaded detector via NN(cvimodel)")
+        except Exception as e2:
+            print(f"⚠️ Detector cvimodel load failed: {e2}. Using center-crop fallback.")
+            det = None
 
     # Load classifier using working backend only (nn.NN with cvimodel)
     cls = None
