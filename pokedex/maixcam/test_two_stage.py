@@ -26,9 +26,7 @@ except Exception as e:
 
 # Paths on device
 DET_MODEL = "/root/models/pokemon_det1_int8.cvimodel"
-DET_MUD = "/root/models/pokemon_det1.mud"
 CLS_MODEL = "/root/models/pokemon_cls1025_int8.cvimodel"
-CLS_MUD = "/root/models/pokemon_cls1025.mud"
 CLASSES_TXT = "/root/models/classes.txt"
 
 
@@ -204,7 +202,7 @@ def main():
     except Exception as e_mud_first:
         print(f"⚠️ Detector MUD load failed: {e_mud_first}")
 
-    # 2) Try auto-generated MUD schema variants
+    # 2) Try auto-generated MUD schema variants (INI and minimal YAML)
     if det is None and (hasattr(nn, 'YOLO11') or hasattr(nn, 'YOLO')):
         auto_mud = "/root/models/pokemon_det1_auto.mud"
         variants = []
