@@ -2269,6 +2269,38 @@ labels:
 
 Place both `.cvimodel` and `.mud` files under `/root/models/`, plus `classes.txt` (1025 lines). Use the two-stage loop: detector → crop (+15% pad) → classifier; start with det_conf=0.35, det_iou=0.45, agree_n=3.
 
+Note (device runtime findings): On MaixCam firmware versions observed, parsing `.mud` for the detector and classifier may fail with errors like "parse model <path>.mud failed, err 5" and wrappers can report "model_type key not found" when loading `.cvimodel` via `YOLO11/YOLO/Classifier`. In practice, an INI-style MUD works for the detector:
+
+```
+[basic]
+type = cvimodel
+model = /root/models/pokemon_det1_int8.cvimodel
+
+[extra]
+model_type = yolo11
+input_type = rgb
+mean = 0, 0, 0
+scale = 0.00392156862745098, 0.00392156862745098, 0.00392156862745098
+labels = pokemon
+```
+
+If the INI parser isn’t available, the reliable path on-device is to load models with the low-level backend:
+
+```python
+from maix import nn
+det = nn.NN("/root/models/pokemon_det1_int8.cvimodel")
+cls = nn.NN("/root/models/pokemon_cls1025_int8.cvimodel")
+```
+
+Then run `forward_image` and decode outputs manually:
+
+- Detector output (observed): a single float tensor length 6720 representing 5 channels concatenated, channel-first layout with N=1344 anchors:
+  - `vals[0:N]` → cx, `vals[N:2N]` → cy, `vals[2N:3N]` → w, `vals[3N:4N]` → h, `vals[4N:5N]` → score (apply sigmoid)
+  - Choose best index by max score, map from 256×256 to original frame, then crop with padding
+- Classifier output: per-class logits vector; apply sigmoid/softmax accordingly, take top-1
+
+The two-stage script `maixcam/test_two_stage.py` implements this layout and logs per-frame the selected index and rectangle for debugging. It also auto-generates the INI-style MUD and attempts to load the YOLO11 wrapper before falling back.
+
 Expected on MaixCam/CV18xx: detector 15+ FPS, classifier 25+ FPS single crop, end-to-end 10–20 FPS with RAM well below ~90MB.
 
 ### Complete PokedexRunner Implementation (READY TO USE)
