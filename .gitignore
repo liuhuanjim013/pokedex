@@ -86,6 +86,14 @@ pokedex/models/compressed/
 !/pokedex/requirements/
 !/pokedex/requirements/**
 
+# Allow MaixCam scripts in models folder (keep large binaries excluded by extension rules)
+!/pokedex/models/
+!/pokedex/models/maixcam/
+!/pokedex/models/maixcam/**
+
+# Still ignore large model artifacts that might appear there
+*.cvimodel
+
 # Cache directories
 .cache/
 .local/
