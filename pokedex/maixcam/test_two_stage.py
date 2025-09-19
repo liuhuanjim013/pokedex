@@ -88,7 +88,7 @@ def clamp_rect(x, y, w, h, W, H):
 def get_best_box_yolo(detector, frame_img):
     # Try high-level YOLO API
     try:
-        boxes = detector.detect(frame_img, conf=DET_CONF, iou=DET_IOU)
+        boxes = detector.detect(frame_img, conf=DET_CONF, iou=DET_IOU, conf_thres=DET_CONF, iou_thres=DET_IOU)
         try:
             n = len(boxes) if boxes is not None else 0
             print(f"[det] wrapper boxes: {n}")
@@ -298,15 +298,16 @@ def main():
             # Try YOLO wrapper first
             try:
                 if hasattr(det, 'detect'):
-                    # Prefer running detect on original frame; wrapper handles resize
-                    best_box, best_score = get_best_box_yolo(det, frame)
-                    det_scale_w, det_scale_h = frame.width(), frame.height()
-            except Exception:
+                    best_box, best_score = get_best_box_yolo(det, frame_det)
+                    print("[det] path=wrapper")
+            except Exception as e_wrap:
+                print(f"[det] wrapper failed: {e_wrap}")
                 best_box, best_score = None, 0.0
             # Generic forward decode
             if best_box is None:
                 try:
                     out = det.forward_image(frame_det, mean=MEAN, scale=SCALE)
+                    print("[det] path=nn.NN raw")
                     # Debug: list tensor keys and first tensor length/head
                     try:
                         keys = list(out.keys())
