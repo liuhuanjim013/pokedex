@@ -45,7 +45,6 @@ COL_GREEN = image.Color(0, 255, 0)
 COL_BLACK = image.Color(0, 0, 0)
 COL_RED = image.Color(255, 0, 0)
 TEXT_SCALE = 1.6
-DET_LOCK_THRESH = 0.52  # require >0.52 to update from baseline 0.5
 
 
 def load_classes(path: str):
@@ -198,7 +197,6 @@ def main():
         raise SystemExit(f"Failed to load classifier: {e}")
 
     recent = []  # temporal smoothing buffer of class ids
-    last_good_det = None  # persist last good detector box in det-scale
 
     while True:
         frame = cam.read()
@@ -219,20 +217,8 @@ def main():
             if best_box is None:
                 try:
                     out = det.forward_image(frame_det, mean=MEAN, scale=SCALE)
-                    # Debug: list tensor keys and first tensor length
-                    try:
-                        keys = list(out.keys())
-                        print(f"[det] tensor keys: {keys}")
-                        if keys:
-                            t0 = out[keys[0]]
-                            if hasattr(t0, 'to_float_list'):
-                                arr0 = t0.to_float_list()
-                                print(f"[det] first tensor len={len(arr0)} head={arr0[:10] if len(arr0)>0 else []}")
-                    except Exception:
-                        pass
-                    # Expect channel-first layout: [cx_all, cy_all, w_all, h_all, score_all] concatenated
+                    # Interleaved 5-tuple layout (cx,cy,w,h,score)*P as in c8551d
                     vals = None
-                    chosen = None
                     for k in out.keys():
                         t = out[k]
                         try:
@@ -241,48 +227,26 @@ def main():
                             continue
                         if isinstance(arr, list) and len(arr) >= 5 and (len(arr) % 5) == 0:
                             vals = arr
-                            chosen = k
                             break
                     if vals is None:
                         raise RuntimeError('detector output invalid')
-                    total = len(vals)
-                    P = total // 5
-                    cx_all = vals[0:P]
-                    cy_all = vals[P:2*P]
-                    w_all  = vals[2*P:3*P]
-                    h_all  = vals[3*P:4*P]
-                    s_all  = vals[4*P:5*P]
-                    # Sigmoid on scores
+                    ch = 5
+                    P = len(vals) // ch
                     best_i = 0
                     best_s = -1.0
                     for i in range(P):
-                        s = 1.0 / (1.0 + math.exp(-max(min(s_all[i], 500.0), -500.0)))
+                        s = vals[i*ch + 4]
+                        s = 1.0 / (1.0 + math.exp(-max(min(s, 500.0), -500.0)))
                         if s > best_s:
                             best_s = s
                             best_i = i
-                    cx = cx_all[best_i]
-                    cy = cy_all[best_i]
-                    bw = w_all[best_i]
-                    bh = h_all[best_i]
-                    cur_box = (float(cx), float(cy), float(bw), float(bh))
-                    cur_score = float(best_s)
-                    # Locking logic: ignore baseline 0.5 unless never locked or significantly better
-                    if cur_score > DET_LOCK_THRESH:
-                        last_good_det = cur_box
-                        best_box, best_score = cur_box, cur_score
-                    elif last_good_det is not None:
-                        best_box, best_score = last_good_det, cur_score
-                        print(f"[det] using last_good_det (score={cur_score:.3f} < {DET_LOCK_THRESH})")
-                    else:
-                        best_box, best_score = cur_box, cur_score
-                    print(f"[det] best_i={best_i}/{P} score={cur_score:.3f}")
+                    cx = vals[best_i*ch + 0]
+                    cy = vals[best_i*ch + 1]
+                    bw = vals[best_i*ch + 2]
+                    bh = vals[best_i*ch + 3]
+                    best_box, best_score = (float(cx), float(cy), float(bw), float(bh)), float(best_s)
                 except Exception:
                     best_box, best_score = None, 0.0
-            # Debug: print chosen detection in detector scale
-            if best_box is not None:
-                print(f"[det] box(cx,cy,w,h)@{DET_SIZE}={best_box} score={best_score:.3f}")
-            else:
-                print("[det] no box, using center-crop fallback")
 
         if best_box is None:
             # center crop fallback
@@ -307,9 +271,7 @@ def main():
             # crop for classifier uses padded & clipped box
             x, y, w, h = pad_and_clip(cx, cy, bw, bh, CROP_PAD, W, H)
             crop = frame.crop(x, y, w, h).resize(CLS_SIZE, CLS_SIZE)
-        # Debug: print final rect on original frame
-        if rect is not None:
-            print(f"[rect] x={rect[0]} y={rect[1]} w={rect[2]} h={rect[3]} (W={W}, H={H})")
+        #
 
         # Classifier inference
         top1_id = 0
