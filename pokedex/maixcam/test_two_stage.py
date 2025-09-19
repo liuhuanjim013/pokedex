@@ -191,18 +191,7 @@ def main():
 
     # Load detector via MUD with YOLO wrapper first, then try auto-generated MUD variants, then fallback
     det = None
-    # 1) Try provided MUD path first
-    try:
-        if hasattr(nn, 'YOLO11'):
-            det = nn.YOLO11(DET_MUD)
-            print("ℹ️ Loaded detector via YOLO11(mud)")
-        elif hasattr(nn, 'YOLO'):
-            det = nn.YOLO(DET_MUD)
-            print("ℹ️ Loaded detector via YOLO(mud)")
-    except Exception as e_mud_first:
-        print(f"⚠️ Detector MUD load failed: {e_mud_first}")
-
-    # 2) Try auto-generated MUD schema variants (INI and minimal YAML)
+    # 1) Try auto-generated MUD schema variants (INI and minimal YAML)
     if det is None and (hasattr(nn, 'YOLO11') or hasattr(nn, 'YOLO')):
         auto_mud = "/root/models/pokemon_det1_auto.mud"
         variants = []
