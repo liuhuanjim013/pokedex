@@ -2269,6 +2269,15 @@ labels:
 
 Place both `.cvimodel` and `.mud` files under `/root/models/`, plus `classes.txt` (1025 lines). Use the two-stage loop: detector → crop (+15% pad) → classifier; start with det_conf=0.35, det_iou=0.45, agree_n=3.
 
+Note (device runtime findings): On MaixCam firmware versions observed, parsing `.mud` for the detector sometimes fails with errors like "parse model <path>.mud failed, err 5" or wrappers report "model_type key not found" when loading `.cvimodel` directly via `YOLO11/YOLO`. The reliable path on-device is to load the detector with the low-level backend:
+
+```python
+from maix import nn
+det = nn.NN("/root/models/pokemon_det1_int8.cvimodel")
+```
+
+Then run `forward_image` and decode the (cx, cy, w, h, score) tuples manually. The two-stage script `maixcam/test_two_stage.py` has been updated to use only this backend for the detector and to log per-frame chosen boxes and final rectangles for debugging.
+
 Expected on MaixCam/CV18xx: detector 15+ FPS, classifier 25+ FPS single crop, end-to-end 10–20 FPS with RAM well below ~90MB.
 
 ### Complete PokedexRunner Implementation (READY TO USE)

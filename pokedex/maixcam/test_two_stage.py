@@ -177,33 +177,14 @@ def main():
     cam = camera.Camera(640, 480)
     disp = display.Display()
 
-    # Load detector with robust fallback chain (prefer MUD)
+    # Load detector using working backend only (nn.NN with cvimodel)
     det = None
-    det_errors = []
-    def _try(name, fn):
-        try:
-            m = fn()
-            print(f"ℹ️ Loaded detector via {name}")
-            return m
-        except Exception as _e:
-            det_errors.append((name, str(_e)))
-            return None
-
-    # Prefer MUD if wrappers exist
-    if hasattr(nn, 'YOLO11'):
-        det = det or _try("YOLO11(mud)", lambda: nn.YOLO11(DET_MUD))
-        det = det or _try("YOLO11(cvimodel)", lambda: nn.YOLO11(DET_MODEL))
-    if hasattr(nn, 'YOLO'):
-        det = det or _try("YOLO(mud)", lambda: nn.YOLO(DET_MUD))
-        det = det or _try("YOLO(cvimodel)", lambda: nn.YOLO(DET_MODEL))
-    # Generic backends
-    det = det or _try("NN(cvimodel)", lambda: nn.NN(DET_MODEL))
-    if hasattr(nn, 'Infer'):
-        det = det or _try("Infer(cvimodel)", lambda: nn.Infer(model=DET_MODEL))
-    if det is None:
-        print("⚠️ Detector load failed across all backends. Using center-crop fallback.")
-        for n, err in det_errors[-3:]:
-            print(f"   - {n} → {err}")
+    try:
+        det = nn.NN(DET_MODEL)
+        print("ℹ️ Loaded detector via NN(cvimodel)")
+    except Exception as e2:
+        print(f"⚠️ Detector cvimodel load failed: {e2}. Using center-crop fallback.")
+        det = None
 
     # Load classifier (prefer MUD, then cvimodel)
     cls = None
@@ -281,6 +262,11 @@ def main():
                     best_box, best_score = (float(cx), float(cy), float(bw), float(bh)), float(best_s)
                 except Exception:
                     best_box, best_score = None, 0.0
+            # Debug: print chosen detection in detector scale
+            if best_box is not None:
+                print(f"[det] box(cx,cy,w,h)@{DET_SIZE}={best_box} score={best_score:.3f}")
+            else:
+                print("[det] no box, using center-crop fallback")
 
         if best_box is None:
             # center crop fallback
@@ -301,6 +287,9 @@ def main():
             x, y, w, h = pad_and_clip(cx, cy, bw, bh, CROP_PAD, W, H)
             crop = frame.crop(x, y, w, h).resize(CLS_SIZE, CLS_SIZE)
             rect = (x, y, w, h)
+        # Debug: print final rect on original frame
+        if rect is not None:
+            print(f"[rect] x={rect[0]} y={rect[1]} w={rect[2]} h={rect[3]} (W={W}, H={H})")
 
         # Classifier inference
         top1_id = 0
