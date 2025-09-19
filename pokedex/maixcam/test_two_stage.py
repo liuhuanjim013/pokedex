@@ -217,6 +217,17 @@ def main():
             if best_box is None:
                 try:
                     out = det.forward_image(frame_det, mean=MEAN, scale=SCALE)
+                    # Debug: list tensor keys and first tensor length/head
+                    try:
+                        keys = list(out.keys())
+                        print(f"[det] tensor keys: {keys}")
+                        if keys:
+                            t0 = out[keys[0]]
+                            if hasattr(t0, 'to_float_list'):
+                                arr0 = t0.to_float_list()
+                                print(f"[det] first tensor len={len(arr0)} head={arr0[:10] if len(arr0)>0 else []}")
+                    except Exception:
+                        pass
                     # Interleaved 5-tuple layout (cx,cy,w,h,score)*P as in c8551d
                     vals = None
                     for k in out.keys():
@@ -245,6 +256,7 @@ def main():
                     bw = vals[best_i*ch + 2]
                     bh = vals[best_i*ch + 3]
                     best_box, best_score = (float(cx), float(cy), float(bw), float(bh)), float(best_s)
+                    print(f"[det] best_i={best_i}/{P} score={best_s:.3f}")
                 except Exception:
                     best_box, best_score = None, 0.0
 
@@ -271,7 +283,9 @@ def main():
             # crop for classifier uses padded & clipped box
             x, y, w, h = pad_and_clip(cx, cy, bw, bh, CROP_PAD, W, H)
             crop = frame.crop(x, y, w, h).resize(CLS_SIZE, CLS_SIZE)
-        #
+        # Debug: print final rect on original frame
+        if rect is not None:
+            print(f"[rect] x={rect[0]} y={rect[1]} w={rect[2]} h={rect[3]} (W={W}, H={H})")
 
         # Classifier inference
         top1_id = 0
