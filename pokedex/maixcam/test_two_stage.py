@@ -33,7 +33,7 @@ CLASSES_TXT = "/root/models/classes.txt"
 # Runtime params
 DET_SIZE = 256
 CLS_SIZE = 224
-DET_CONF = 0.15
+DET_CONF = 0.01
 DET_IOU = 0.45
 CROP_PAD = 0.15
 AGREE_N = 3  # temporal smoothing: agree in last N frames
@@ -92,6 +92,19 @@ def get_best_box_yolo(detector, frame_img):
         try:
             n = len(boxes) if boxes is not None else 0
             print(f"[det] wrapper boxes: {n}")
+            if n:
+                # Log up to first 3 boxes
+                log_k = min(3, n)
+                for i in range(log_k):
+                    b = boxes[i]
+                    s = (getattr(b, 'score', None) or getattr(b, 'conf', None)
+                         or (b.get('score', None) if hasattr(b, 'get') else None)
+                         or (b.get('conf', None) if hasattr(b, 'get') else None))
+                    x = getattr(b, 'x', None) or (b.get('x', None) if hasattr(b, 'get') else None)
+                    y = getattr(b, 'y', None) or (b.get('y', None) if hasattr(b, 'get') else None)
+                    w = getattr(b, 'w', None) or (b.get('w', None) if hasattr(b, 'get') else None)
+                    h = getattr(b, 'h', None) or (b.get('h', None) if hasattr(b, 'get') else None)
+                    print(f"[det] box[{i}]: x={x} y={y} w={w} h={h} score={s}")
         except Exception:
             pass
 
