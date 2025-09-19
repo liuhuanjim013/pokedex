@@ -228,7 +228,7 @@ def main():
                                 print(f"[det] first tensor len={len(arr0)} head={arr0[:10] if len(arr0)>0 else []}")
                     except Exception:
                         pass
-                    # Find a tensor whose length is multiple of 5 (cx,cy,w,h,score)*P
+                    # Expect channel-first layout: [cx_all, cy_all, w_all, h_all, score_all] concatenated
                     vals = None
                     chosen = None
                     for k in out.keys():
@@ -243,23 +243,27 @@ def main():
                             break
                     if vals is None:
                         raise RuntimeError('detector output invalid')
-                    else:
-                        print(f"[det] chosen tensor='{chosen}' len={len(vals)} (5-per-box)")
-                    ch = 5
-                    P = len(vals) // ch
+                    total = len(vals)
+                    P = total // 5
+                    cx_all = vals[0:P]
+                    cy_all = vals[P:2*P]
+                    w_all  = vals[2*P:3*P]
+                    h_all  = vals[3*P:4*P]
+                    s_all  = vals[4*P:5*P]
+                    # Sigmoid on scores
                     best_i = 0
                     best_s = -1.0
                     for i in range(P):
-                        s = vals[i*ch + 4]
-                        s = 1.0 / (1.0 + math.exp(-max(min(s, 500.0), -500.0)))
+                        s = 1.0 / (1.0 + math.exp(-max(min(s_all[i], 500.0), -500.0)))
                         if s > best_s:
                             best_s = s
                             best_i = i
-                    cx = vals[best_i*ch + 0]
-                    cy = vals[best_i*ch + 1]
-                    bw = vals[best_i*ch + 2]
-                    bh = vals[best_i*ch + 3]
+                    cx = cx_all[best_i]
+                    cy = cy_all[best_i]
+                    bw = w_all[best_i]
+                    bh = h_all[best_i]
                     best_box, best_score = (float(cx), float(cy), float(bw), float(bh)), float(best_s)
+                    print(f"[det] best_i={best_i}/{P} score={best_s:.3f}")
                 except Exception:
                     best_box, best_score = None, 0.0
             # Debug: print chosen detection in detector scale

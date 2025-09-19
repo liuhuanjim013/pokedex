@@ -2277,7 +2277,14 @@ det = nn.NN("/root/models/pokemon_det1_int8.cvimodel")
 cls = nn.NN("/root/models/pokemon_cls1025_int8.cvimodel")
 ```
 
-Then run `forward_image` and decode the (cx, cy, w, h, score) tuples manually for the detector, and per-class logits for the classifier (apply sigmoid/softmax as needed). The two-stage script `maixcam/test_two_stage.py` uses `nn.NN` for both and logs per-frame chosen boxes and final rectangles for debugging.
+Then run `forward_image` and decode outputs manually:
+
+- Detector output (observed): a single float tensor length 6720 representing 5 channels concatenated, channel-first layout with N=1344 anchors:
+  - `vals[0:N]` → cx, `vals[N:2N]` → cy, `vals[2N:3N]` → w, `vals[3N:4N]` → h, `vals[4N:5N]` → score (apply sigmoid)
+  - Choose best index by max score, map from 256×256 to original frame, then crop with padding
+- Classifier output: per-class logits vector; apply sigmoid/softmax accordingly, take top-1
+
+The two-stage script `maixcam/test_two_stage.py` implements this layout and logs per-frame the selected index and rectangle for debugging.
 
 Expected on MaixCam/CV18xx: detector 15+ FPS, classifier 25+ FPS single crop, end-to-end 10–20 FPS with RAM well below ~90MB.
 
