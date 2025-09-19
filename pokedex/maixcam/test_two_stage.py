@@ -232,6 +232,7 @@ def main():
         best_box, best_score = None, 0.0
         if det is not None:
             frame_det = frame.resize(DET_SIZE, DET_SIZE)
+            det_scale_w, det_scale_h = DET_SIZE, DET_SIZE
             try:
                 out = det.forward_image(frame_det, mean=MEAN, scale=SCALE)
                 # Debug: list tensor keys and first tensor length/head
