@@ -143,6 +143,7 @@ def main():
     while True:
         frame = cam.read()
         W, H = frame.width(), frame.height()
+        rect = None
 
         # Detector inference (if loaded)
         best_box, best_score = None, 0.0
@@ -197,6 +198,7 @@ def main():
             x = (W - s) // 2
             y = (H - s) // 2
             crop = frame.crop(x, y, s, s).resize(CLS_SIZE, CLS_SIZE)
+            rect = (x, y, s, s)
         else:
             # map box back to original frame scale
             cx, cy, bw, bh = best_box
@@ -208,6 +210,7 @@ def main():
             bh *= sy
             x, y, w, h = pad_and_clip(cx, cy, bw, bh, CROP_PAD, W, H)
             crop = frame.crop(x, y, w, h).resize(CLS_SIZE, CLS_SIZE)
+            rect = (x, y, w, h)
 
         # Classifier inference
         top1_id = 0
@@ -264,14 +267,8 @@ def main():
         for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, -1), (-1, 1), (1, 1)):
             frame.draw_string(x_text + dx, y_text + dy, label, COL_BLACK, TEXT_SCALE)
         frame.draw_string(x_text, y_text, label, COL_YELLOW, TEXT_SCALE)
-        if best_box is not None:
-            # draw bbox (projected to original)
-            cx, cy, bw, bh = best_box
-            sx = W / float(DET_SIZE)
-            sy = H / float(DET_SIZE)
-            cx *= sx; cy *= sy; bw *= sx; bh *= sy
-            x1 = int(cx - bw / 2); y1 = int(cy - bh / 2)
-            frame.draw_rect(x1, y1, int(bw), int(bh), COL_GREEN)
+        if rect is not None:
+            frame.draw_rect(int(rect[0]), int(rect[1]), int(rect[2]), int(rect[3]), COL_GREEN)
         disp.show(frame)
 
         # slight delay to keep UI responsive
