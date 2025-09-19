@@ -91,6 +91,11 @@ def get_best_box_yolo(detector, frame_img):
     # Try high-level YOLO API
     try:
         boxes = detector.detect(frame_img, conf=DET_CONF, iou=DET_IOU)
+        try:
+            n = len(boxes) if boxes is not None else 0
+            print(f"[det] wrapper boxes: {n}")
+        except Exception:
+            pass
 
         def get_val(obj, *keys):
             for k in keys:
@@ -289,10 +294,13 @@ def main():
         best_box, best_score = None, 0.0
         if det is not None:
             frame_det = frame.resize(DET_SIZE, DET_SIZE)
+            det_scale_w, det_scale_h = DET_SIZE, DET_SIZE
             # Try YOLO wrapper first
             try:
                 if hasattr(det, 'detect'):
-                    best_box, best_score = get_best_box_yolo(det, frame_det)
+                    # Prefer running detect on original frame; wrapper handles resize
+                    best_box, best_score = get_best_box_yolo(det, frame)
+                    det_scale_w, det_scale_h = frame.width(), frame.height()
             except Exception:
                 best_box, best_score = None, 0.0
             # Generic forward decode
@@ -365,8 +373,8 @@ def main():
         else:
             # map detected box back to original frame scale (no padding for drawn rect)
             cx, cy, bw, bh = best_box
-            sx = W / float(DET_SIZE)
-            sy = H / float(DET_SIZE)
+            sx = W / float(det_scale_w)
+            sy = H / float(det_scale_h)
             cx *= sx
             cy *= sy
             bw *= sx
