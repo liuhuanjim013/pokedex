@@ -202,76 +202,14 @@ def main():
     cam = camera.Camera(640, 480)
     disp = display.Display()
 
-    # Load detector via MUD with YOLO wrapper first, then try auto-generated MUD variants, then fallback
+    # Load detector via NN only (YOLO wrapper unreliable on this firmware)
     det = None
-    # 1) Try auto-generated MUD schema variants (INI and minimal YAML)
-    if det is None and (hasattr(nn, 'YOLO11') or hasattr(nn, 'YOLO')):
-        auto_mud = "/root/models/pokemon_det1_auto.mud"
-        variants = []
-        cvip = DET_MODEL
-        # Minimal variants first
-        variants.append(("model_type+yolo11+model(min)", f"model_type: yolo11\nmodel: {cvip}\n"))
-        variants.append(("model_type+yolo11+model+class_names", f"model_type: yolo11\nmodel: {cvip}\nclass_names: [\"pokemon\"]\n"))
-        variants.append(("model_type+yolo+model+class_names", f"model_type: yolo\nmodel: {cvip}\nclass_names: [\"pokemon\"]\n"))
-        # With input/preprocess
-        common_ip = ("input:\n  format: rgb\n  width: 256\n  height: 256\n"
-                     "preprocess:\n  mean: [0.0, 0.0, 0.0]\n  scale: [0.003922, 0.003922, 0.003922]\n")
-        variants.append(("type+yolo11+cvimodel+ip+labels", f"type: yolo11\ncvimodel: {cvip}\n{common_ip}labels:\n  num: 1\n  names: [\"pokemon\"]\n"))
-        variants.append(("type+yolo+cvimodel+ip+labels", f"type: yolo\ncvimodel: {cvip}\n{common_ip}labels:\n  num: 1\n  names: [\"pokemon\"]\n"))
-        variants.append(("model_type+yolo11+model+ip+class_names", f"model_type: yolo11\nmodel: {cvip}\n{common_ip}class_names: [\"pokemon\"]\n"))
-        # INI-style [basic]/[extra] variants per MaixCam notes
-        ini_basic = f"[basic]\ntype = cvimodel\nmodel = {cvip}\n\n"
-        ini_extra_common = (
-            "[extra]\n"
-            "input_type = rgb\n"
-            "mean = 0, 0, 0\n"
-            "scale = 0.00392156862745098, 0.00392156862745098, 0.00392156862745098\n"
-            "labels = pokemon\n"
-        )
-        variants.append((
-            "ini-basic-extra-yolov8",
-            ini_basic + "[extra]\nmodel_type = yolov8\n" + ini_extra_common.split("\n",1)[1]
-        ))
-        variants.append((
-            "ini-basic-extra-yolo11",
-            ini_basic + "[extra]\nmodel_type = yolo11\n" + ini_extra_common.split("\n",1)[1]
-        ))
-
-        for vname, vtext in variants:
-            try:
-                with open(auto_mud, "w", encoding="utf-8") as f:
-                    f.write(vtext)
-                # Ensure permissions and LF endings
-                try:
-                    os.chmod(auto_mud, 0o644)
-                except Exception:
-                    pass
-                # Try load
-                if hasattr(nn, 'YOLO11'):
-                    det = nn.YOLO11(auto_mud)
-                    print(f"ℹ️ Loaded detector via YOLO11(auto mud: {vname})")
-                    break
-                elif hasattr(nn, 'YOLO'):
-                    det = nn.YOLO(auto_mud)
-                    print(f"ℹ️ Loaded detector via YOLO(auto mud: {vname})")
-                    break
-            except Exception as e_var:
-                print(f"⚠️ Auto MUD variant failed ({vname}): {e_var}")
-        # Cleanup temp mud if not successfully loaded
-        if det is None:
-            try:
-                os.remove(auto_mud)
-            except Exception:
-                pass
-
-    # 3) Fallback to NN(cvimodel)
-    if det is None:
-        try:
-            det = nn.NN(DET_MODEL)
-            print("ℹ️ Loaded detector via NN(cvimodel)")
-        except Exception as e2:
-            print(f"⚠️ Detector cvimodel load failed: {e2}. Using center-crop fallback.")
-            det = None
+    try:
+        det = nn.NN(DET_MODEL)
+        print("ℹ️ Loaded detector via NN(cvimodel)")
+    except Exception as e2:
+        print(f"⚠️ Detector cvimodel load failed: {e2}. Using center-crop fallback.")
+        det = None
 
     # Load classifier using working backend only (nn.NN with cvimodel)
     cls = None
@@ -290,79 +228,67 @@ def main():
         W, H = frame.width(), frame.height()
         rect = None
 
-        # Detector inference (if loaded)
+        # Detector inference (if loaded) — manual decode only
         best_box, best_score = None, 0.0
         if det is not None:
             frame_det = frame.resize(DET_SIZE, DET_SIZE)
-            det_scale_w, det_scale_h = DET_SIZE, DET_SIZE
-            # Try YOLO wrapper first
             try:
-                if hasattr(det, 'detect'):
-                    best_box, best_score = get_best_box_yolo(det, frame_det)
-                    print("[det] path=wrapper")
-            except Exception as e_wrap:
-                print(f"[det] wrapper failed: {e_wrap}")
-                best_box, best_score = None, 0.0
-            # Generic forward decode
-            if best_box is None:
+                out = det.forward_image(frame_det, mean=MEAN, scale=SCALE)
+                # Debug: list tensor keys and first tensor length/head
                 try:
-                    out = det.forward_image(frame_det, mean=MEAN, scale=SCALE)
-                    print("[det] path=nn.NN raw")
-                    # Debug: list tensor keys and first tensor length/head
-                    try:
-                        keys = list(out.keys())
-                        print(f"[det] tensor keys: {keys}")
-                        if keys:
-                            t0 = out[keys[0]]
-                            if hasattr(t0, 'to_float_list'):
-                                arr0 = t0.to_float_list()
-                                print(f"[det] first tensor len={len(arr0)} head={arr0[:10] if len(arr0)>0 else []}")
-                    except Exception:
-                        pass
-                    # Channel-first layout: [cx_all, cy_all, w_all, h_all, score_all] concatenated
-                    vals = None
-                    for k in out.keys():
-                        t = out[k]
-                        try:
-                            arr = t.to_float_list()
-                        except Exception:
-                            continue
-                        if isinstance(arr, list) and len(arr) >= 5 and (len(arr) % 5) == 0:
-                            vals = arr
-                            break
-                    if vals is None:
-                        raise RuntimeError('detector output invalid')
-                    P = len(vals) // 5
-                    cx_all = vals[0:P]
-                    cy_all = vals[P:2*P]
-                    w_all  = vals[2*P:3*P]
-                    h_all  = vals[3*P:4*P]
-                    s_raw  = vals[4*P:5*P]
-                    # Sigmoid scores
-                    s_all = []
-                    best_i = 0
-                    best_s = -1.0
-                    for i in range(P):
-                        s = 1.0 / (1.0 + math.exp(-max(min(s_raw[i], 500.0), -500.0)))
-                        s_all.append(s)
-                        if s > best_s:
-                            best_s = s
-                            best_i = i
-                    # Logging: score stats and small top-3
-                    try:
-                        min_s = min(s_all) if s_all else 0.0
-                        max_s = max(s_all) if s_all else 0.0
-                        top3 = sorted(((s_all[i], i) for i in range(P)), reverse=True)[:3]
-                        print(f"[det] best_i={best_i}/{P} score={best_s:.3f} min={min_s:.3f} max={max_s:.3f} top3={[ (i, round(s,3)) for s,i in top3 ]}")
-                    except Exception:
-                        pass
-                    cx = cx_all[best_i]
-                    cy = cy_all[best_i]
-                    bw = w_all[best_i]
-                    bh = h_all[best_i]
-                    best_box, best_score = (float(cx), float(cy), float(bw), float(bh)), float(best_s)
+                    keys = list(out.keys())
+                    print(f"[det] tensor keys: {keys}")
+                    if keys:
+                        t0 = out[keys[0]]
+                        if hasattr(t0, 'to_float_list'):
+                            arr0 = t0.to_float_list()
+                            print(f"[det] first tensor len={len(arr0)} head={arr0[:10] if len(arr0)>0 else []}")
                 except Exception:
-                    best_box, best_score = None, 0.0
+                    pass
+                # Channel-first layout: [cx_all, cy_all, w_all, h_all, score_all] concatenated
+                vals = None
+                for k in out.keys():
+                    t = out[k]
+                    try:
+                        arr = t.to_float_list()
+                    except Exception:
+                        continue
+                    if isinstance(arr, list) and len(arr) >= 5 and (len(arr) % 5) == 0:
+                        vals = arr
+                        break
+                if vals is None:
+                    raise RuntimeError('detector output invalid')
+                P = len(vals) // 5
+                cx_all = vals[0:P]
+                cy_all = vals[P:2*P]
+                w_all  = vals[2*P:3*P]
+                h_all  = vals[3*P:4*P]
+                s_raw  = vals[4*P:5*P]
+                # Sigmoid scores
+                s_all = []
+                best_i = 0
+                best_s = -1.0
+                for i in range(P):
+                    s = 1.0 / (1.0 + math.exp(-max(min(s_raw[i], 500.0), -500.0)))
+                    s_all.append(s)
+                    if s > best_s:
+                        best_s = s
+                        best_i = i
+                # Logging: score stats and small top-3
+                try:
+                    min_s = min(s_all) if s_all else 0.0
+                    max_s = max(s_all) if s_all else 0.0
+                    top3 = sorted(((s_all[i], i) for i in range(P)), reverse=True)[:3]
+                    print(f"[det] best_i={best_i}/{P} score={best_s:.3f} min={min_s:.3f} max={max_s:.3f} top3={[ (i, round(s,3)) for s,i in top3 ]}")
+                except Exception:
+                    pass
+                cx = cx_all[best_i]
+                cy = cy_all[best_i]
+                bw = w_all[best_i]
+                bh = h_all[best_i]
+                best_box, best_score = (float(cx), float(cy), float(bw), float(bh)), float(best_s)
+            except Exception:
+                best_box, best_score = None, 0.0
 
         if best_box is None:
             # center crop fallback
