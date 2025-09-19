@@ -228,7 +228,7 @@ def main():
                                 print(f"[det] first tensor len={len(arr0)} head={arr0[:10] if len(arr0)>0 else []}")
                     except Exception:
                         pass
-                    # Interleaved 5-tuple layout (cx,cy,w,h,score)*P as in c8551d
+                    # Channel-first layout: [cx_all, cy_all, w_all, h_all, score_all] concatenated
                     vals = None
                     for k in out.keys():
                         t = out[k]
@@ -241,22 +241,35 @@ def main():
                             break
                     if vals is None:
                         raise RuntimeError('detector output invalid')
-                    ch = 5
-                    P = len(vals) // ch
+                    P = len(vals) // 5
+                    cx_all = vals[0:P]
+                    cy_all = vals[P:2*P]
+                    w_all  = vals[2*P:3*P]
+                    h_all  = vals[3*P:4*P]
+                    s_raw  = vals[4*P:5*P]
+                    # Sigmoid scores
+                    s_all = []
                     best_i = 0
                     best_s = -1.0
                     for i in range(P):
-                        s = vals[i*ch + 4]
-                        s = 1.0 / (1.0 + math.exp(-max(min(s, 500.0), -500.0)))
+                        s = 1.0 / (1.0 + math.exp(-max(min(s_raw[i], 500.0), -500.0)))
+                        s_all.append(s)
                         if s > best_s:
                             best_s = s
                             best_i = i
-                    cx = vals[best_i*ch + 0]
-                    cy = vals[best_i*ch + 1]
-                    bw = vals[best_i*ch + 2]
-                    bh = vals[best_i*ch + 3]
+                    # Logging: score stats and small top-3
+                    try:
+                        min_s = min(s_all) if s_all else 0.0
+                        max_s = max(s_all) if s_all else 0.0
+                        top3 = sorted(((s_all[i], i) for i in range(P)), reverse=True)[:3]
+                        print(f"[det] best_i={best_i}/{P} score={best_s:.3f} min={min_s:.3f} max={max_s:.3f} top3={[ (i, round(s,3)) for s,i in top3 ]}")
+                    except Exception:
+                        pass
+                    cx = cx_all[best_i]
+                    cy = cy_all[best_i]
+                    bw = w_all[best_i]
+                    bh = h_all[best_i]
                     best_box, best_score = (float(cx), float(cy), float(bw), float(bh)), float(best_s)
-                    print(f"[det] best_i={best_i}/{P} score={best_s:.3f}")
                 except Exception:
                     best_box, best_score = None, 0.0
 
