@@ -292,7 +292,7 @@ def main():
             crop = frame.crop(x, y, s, s).resize(CLS_SIZE, CLS_SIZE)
             rect = (x, y, s, s)
         else:
-            # map box back to original frame scale
+            # map detected box back to original frame scale (no padding for drawn rect)
             cx, cy, bw, bh = best_box
             sx = W / float(DET_SIZE)
             sy = H / float(DET_SIZE)
@@ -300,9 +300,13 @@ def main():
             cy *= sy
             bw *= sx
             bh *= sy
+            # rect for drawing (no pad)
+            x1 = int(cx - bw / 2)
+            y1 = int(cy - bh / 2)
+            rect = (x1, y1, int(bw), int(bh))
+            # crop for classifier uses padded & clipped box
             x, y, w, h = pad_and_clip(cx, cy, bw, bh, CROP_PAD, W, H)
             crop = frame.crop(x, y, w, h).resize(CLS_SIZE, CLS_SIZE)
-            rect = (x, y, w, h)
         # Debug: print final rect on original frame
         if rect is not None:
             print(f"[rect] x={rect[0]} y={rect[1]} w={rect[2]} h={rect[3]} (W={W}, H={H})")
