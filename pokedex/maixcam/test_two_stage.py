@@ -32,7 +32,7 @@ CLASSES_TXT = "/root/models/classes.txt"
 # Runtime params
 DET_SIZE = 256
 CLS_SIZE = 224
-DET_CONF = 0.35
+DET_CONF = 0.15
 DET_IOU = 0.45
 CROP_PAD = 0.15
 AGREE_N = 3  # temporal smoothing: agree in last N frames
@@ -41,6 +41,7 @@ SCALE = (1.0/255.0, 1.0/255.0, 1.0/255.0)
 COL_YELLOW = image.Color(255, 255, 0)
 COL_GREEN = image.Color(0, 255, 0)
 COL_BLACK = image.Color(0, 0, 0)
+COL_RED = image.Color(255, 0, 0)
 TEXT_SCALE = 1.6
 
 
@@ -75,26 +76,94 @@ def pad_and_clip(x, y, w, h, pad, W, H):
     return x1, y1, x2 - x1 + 1, y2 - y1 + 1
 
 
-def get_best_box_yolo(detector, frame_det):
+def get_best_box_yolo(detector, frame_img):
     # Try high-level YOLO API
     try:
-        boxes = detector.detect(frame_det, conf=DET_CONF, iou=DET_IOU)
-        # boxes may be list of dicts/tuples; pick highest confidence
+        boxes = detector.detect(frame_img, conf=DET_CONF, iou=DET_IOU)
+
+        def get_val(obj, *keys):
+            for k in keys:
+                v = getattr(obj, k, None)
+                if v is not None:
+                    return v
+                try:
+                    v = obj.get(k, None)  # dict-like
+                    if v is not None:
+                        return v
+                except Exception:
+                    pass
+            return None
+
+        def parse_box(b):
+            # Try explicit center-width-height
+            cx = get_val(b, 'cx', 'center_x', 'xc')
+            cy = get_val(b, 'cy', 'center_y', 'yc')
+            bw = get_val(b, 'w', 'width')
+            bh = get_val(b, 'h', 'height')
+            if cx is not None and cy is not None and bw is not None and bh is not None:
+                return float(cx), float(cy), float(bw), float(bh)
+
+            # Try combined bbox field
+            bbox = get_val(b, 'bbox', 'box', 'rect', 'xywh', 'tlbr')
+            if isinstance(bbox, (list, tuple)) and len(bbox) >= 4:
+                bx0, by0, bw0, bh0 = float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])
+                # Heuristic: if third and fourth look like bottom-right, convert to w,h
+                if bw0 > bx0 and bh0 > by0:
+                    w2 = max(0.0, bw0 - bx0)
+                    h2 = max(0.0, bh0 - by0)
+                    return float(bx0 + w2 / 2.0), float(by0 + h2 / 2.0), w2, h2
+                else:
+                    return float(bx0 + bw0 / 2.0), float(by0 + bh0 / 2.0), float(bw0), float(bh0)
+
+            # Try top-left + size
+            x = get_val(b, 'x', 'x1', 'left')
+            y = get_val(b, 'y', 'y1', 'top')
+            w = get_val(b, 'w', 'width')
+            h = get_val(b, 'h', 'height')
+            if x is not None and y is not None and w is not None and h is not None:
+                return float(x + w / 2.0), float(y + h / 2.0), float(w), float(h)
+
+            # Try corners
+            x1 = get_val(b, 'x1', 'left')
+            y1 = get_val(b, 'y1', 'top')
+            x2 = get_val(b, 'x2', 'right')
+            y2 = get_val(b, 'y2', 'bottom')
+            if x1 is not None and y1 is not None and x2 is not None and y2 is not None:
+                x1 = float(x1); y1 = float(y1); x2 = float(x2); y2 = float(y2)
+                bw = max(0.0, x2 - x1)
+                bh = max(0.0, y2 - y1)
+                return float(x1 + bw / 2.0), float(y1 + bh / 2.0), bw, bh
+
+            # Tuple/list fallback
+            if isinstance(b, (list, tuple)):
+                if len(b) >= 4:
+                    x, y, w, h = b[0], b[1], b[2], b[3]
+                    return float(x + w / 2.0), float(y + h / 2.0), float(w), float(h)
+            return None
+
+        # boxes may be list of dicts/tuples/objects; pick highest confidence
         best = None
         best_score = -1.0
         for b in boxes or []:
-            # Common fields: x,y,w,h,score/conf
-            x = getattr(b, "x", None) or b.get("x", None)
-            y = getattr(b, "y", None) or b.get("y", None)
-            w = getattr(b, "w", None) or b.get("w", None)
-            h = getattr(b, "h", None) or b.get("h", None)
-            s = (getattr(b, "score", None) or getattr(b, "conf", None)
-                 or b.get("score", None) or b.get("conf", None) or 0.0)
-            if x is None or y is None or w is None or h is None:
+            parsed = parse_box(b)
+            if parsed is None:
                 continue
+            score = get_val(b, 'score', 'conf', 'prob', 'confidence')
+            try:
+                s = float(score) if score is not None else 0.0
+            except Exception:
+                s = 0.0
             if s > best_score:
-                best = (float(x + w / 2), float(y + h / 2), float(w), float(h))
-                best_score = float(s)
+                best = parsed
+                best_score = s
+        if best is not None:
+            cx, cy, bw, bh = best
+            # If values appear normalized, scale to pixel coordinates of the image used for detect
+            if max(abs(cx), abs(cy), abs(bw), abs(bh)) <= 1.5:
+                dw = float(frame_img.width())
+                dh = float(frame_img.height())
+                cx *= dw; cy *= dh; bw *= dw; bh *= dh
+                best = (cx, cy, bw, bh)
         return best, best_score
     except Exception:
         return None, 0.0
@@ -268,7 +337,8 @@ def main():
             frame.draw_string(x_text + dx, y_text + dy, label, COL_BLACK, TEXT_SCALE)
         frame.draw_string(x_text, y_text, label, COL_YELLOW, TEXT_SCALE)
         if rect is not None:
-            frame.draw_rect(int(rect[0]), int(rect[1]), int(rect[2]), int(rect[3]), COL_GREEN)
+            color = COL_GREEN if best_box is not None and best_score >= DET_CONF else COL_RED
+            frame.draw_rect(int(rect[0]), int(rect[1]), int(rect[2]), int(rect[3]), color)
         disp.show(frame)
 
         # slight delay to keep UI responsive
