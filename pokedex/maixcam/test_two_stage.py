@@ -186,26 +186,13 @@ def main():
         print(f"⚠️ Detector cvimodel load failed: {e2}. Using center-crop fallback.")
         det = None
 
-    # Load classifier (prefer MUD, then cvimodel)
+    # Load classifier using working backend only (nn.NN with cvimodel)
     cls = None
     cls_is_generic = True
     try:
-        if hasattr(nn, 'Classifier'):
-            try:
-                # Try MUD first if available
-                try:
-                    cls = nn.Classifier(CLS_MUD)
-                    cls_is_generic = False
-                except Exception:
-                    cls = nn.Classifier(CLS_MODEL)
-                    cls_is_generic = False
-            except Exception:
-                cls = nn.NN(CLS_MODEL)
-                cls_is_generic = True
-        else:
-            cls = nn.NN(CLS_MODEL)
-            cls_is_generic = True
-        print("ℹ️ Loaded classifier")
+        cls = nn.NN(CLS_MODEL)
+        cls_is_generic = True
+        print("ℹ️ Loaded classifier via NN(cvimodel)")
     except Exception as e:
         raise SystemExit(f"Failed to load classifier: {e}")
 
@@ -230,6 +217,17 @@ def main():
             if best_box is None:
                 try:
                     out = det.forward_image(frame_det, mean=MEAN, scale=SCALE)
+                    # Debug: list tensor keys and first tensor length
+                    try:
+                        keys = list(out.keys())
+                        print(f"[det] tensor keys: {keys}")
+                        if keys:
+                            t0 = out[keys[0]]
+                            if hasattr(t0, 'to_float_list'):
+                                arr0 = t0.to_float_list()
+                                print(f"[det] first tensor len={len(arr0)} head={arr0[:10] if len(arr0)>0 else []}")
+                    except Exception:
+                        pass
                     # Find a tensor whose length is multiple of 5 (cx,cy,w,h,score)*P
                     vals = None
                     chosen = None
@@ -245,6 +243,8 @@ def main():
                             break
                     if vals is None:
                         raise RuntimeError('detector output invalid')
+                    else:
+                        print(f"[det] chosen tensor='{chosen}' len={len(vals)} (5-per-box)")
                     ch = 5
                     P = len(vals) // ch
                     best_i = 0
