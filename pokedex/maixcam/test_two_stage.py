@@ -25,7 +25,9 @@ except Exception as e:
 
 # Paths on device
 DET_MODEL = "/root/models/pokemon_det1_int8.cvimodel"
+DET_MUD = "/root/models/pokemon_det1.mud"
 CLS_MODEL = "/root/models/pokemon_cls1025_int8.cvimodel"
+CLS_MUD = "/root/models/pokemon_cls1025.mud"
 CLASSES_TXT = "/root/models/classes.txt"
 
 
@@ -175,35 +177,54 @@ def main():
     cam = camera.Camera(640, 480)
     disp = display.Display()
 
-    # Load detector (always from cvimodel; MUD parsing unreliable on device)
+    # Load detector with robust fallback chain (prefer MUD)
     det = None
-    try:
-        if hasattr(nn, 'YOLO11'):
-            det = nn.YOLO11(DET_MODEL)
-        elif hasattr(nn, 'YOLO'):
-            det = nn.YOLO(DET_MODEL)
-        else:
-            det = nn.NN(DET_MODEL)
-        print("ℹ️ Loaded detector from cvimodel")
-    except Exception as e2:
-        print(f"⚠️ Detector cvimodel load failed: {e2}. Using center-crop fallback.")
-        det = None
+    det_errors = []
+    def _try(name, fn):
+        try:
+            m = fn()
+            print(f"ℹ️ Loaded detector via {name}")
+            return m
+        except Exception as _e:
+            det_errors.append((name, str(_e)))
+            return None
 
-    # Load classifier (always from cvimodel)
+    # Prefer MUD if wrappers exist
+    if hasattr(nn, 'YOLO11'):
+        det = det or _try("YOLO11(mud)", lambda: nn.YOLO11(DET_MUD))
+        det = det or _try("YOLO11(cvimodel)", lambda: nn.YOLO11(DET_MODEL))
+    if hasattr(nn, 'YOLO'):
+        det = det or _try("YOLO(mud)", lambda: nn.YOLO(DET_MUD))
+        det = det or _try("YOLO(cvimodel)", lambda: nn.YOLO(DET_MODEL))
+    # Generic backends
+    det = det or _try("NN(cvimodel)", lambda: nn.NN(DET_MODEL))
+    if hasattr(nn, 'Infer'):
+        det = det or _try("Infer(cvimodel)", lambda: nn.Infer(model=DET_MODEL))
+    if det is None:
+        print("⚠️ Detector load failed across all backends. Using center-crop fallback.")
+        for n, err in det_errors[-3:]:
+            print(f"   - {n} → {err}")
+
+    # Load classifier (prefer MUD, then cvimodel)
     cls = None
     cls_is_generic = True
     try:
         if hasattr(nn, 'Classifier'):
             try:
-                cls = nn.Classifier(CLS_MODEL)
-                cls_is_generic = False
+                # Try MUD first if available
+                try:
+                    cls = nn.Classifier(CLS_MUD)
+                    cls_is_generic = False
+                except Exception:
+                    cls = nn.Classifier(CLS_MODEL)
+                    cls_is_generic = False
             except Exception:
                 cls = nn.NN(CLS_MODEL)
                 cls_is_generic = True
         else:
             cls = nn.NN(CLS_MODEL)
             cls_is_generic = True
-        print("ℹ️ Loaded classifier from cvimodel")
+        print("ℹ️ Loaded classifier")
     except Exception as e:
         raise SystemExit(f"Failed to load classifier: {e}")
 
