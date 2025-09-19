@@ -267,22 +267,57 @@ def main():
                 s_raw  = vals[4*P:5*P]
                 # Sigmoid scores
                 s_all = []
-                best_i = 0
-                best_s = -1.0
                 for i in range(P):
-                    s = 1.0 / (1.0 + math.exp(-max(min(s_raw[i], 500.0), -500.0)))
-                    s_all.append(s)
-                    if s > best_s:
-                        best_s = s
-                        best_i = i
-                # Logging: score stats and small top-3
+                    s_all.append(1.0 / (1.0 + math.exp(-max(min(s_raw[i], 500.0), -500.0))))
+
+                # Heuristic re-scoring when scores are flat (all ~0.5)
                 try:
                     min_s = min(s_all) if s_all else 0.0
                     max_s = max(s_all) if s_all else 0.0
+                except Exception:
+                    min_s, max_s = 0.0, 0.0
+
+                best_i = 0
+                best_s = -1.0
+                if max_s - min_s < 0.05:
+                    # Apply center and size priors on 256x256 space
+                    img_w = float(DET_SIZE)
+                    img_h = float(DET_SIZE)
+                    cx_c = img_w * 0.5
+                    cy_c = img_h * 0.5
+                    center_bias = 0.25
+                    size_bias = 0.10
+                    best_eff = -1e9
+                    for i in range(P):
+                        cx_i = cx_all[i]
+                        cy_i = cy_all[i]
+                        bw_i = max(1.0, w_all[i])
+                        bh_i = max(1.0, h_all[i])
+                        # distance from center in [0,1]
+                        dx = (cx_i - cx_c) / img_w
+                        dy = (cy_i - cy_c) / img_h
+                        dist = (dx*dx + dy*dy) ** 0.5
+                        center_term = (1.0 - min(1.0, dist * 2.0))  # prefer within center radius
+                        area_term = min(1.0, (bw_i * bh_i) / (img_w * img_h))
+                        eff = s_all[i] + center_bias * center_term + size_bias * area_term
+                        if eff > best_eff:
+                            best_eff = eff
+                            best_i = i
+                            best_s = s_all[i]
+                else:
+                    for i in range(P):
+                        s = s_all[i]
+                        if s > best_s:
+                            best_s = s
+                            best_i = i
+
+                # Logging: score stats and small top-3
+                try:
                     top3 = sorted(((s_all[i], i) for i in range(P)), reverse=True)[:3]
                     print(f"[det] best_i={best_i}/{P} score={best_s:.3f} min={min_s:.3f} max={max_s:.3f} top3={[ (i, round(s,3)) for s,i in top3 ]}")
                 except Exception:
                     pass
+
                 cx = cx_all[best_i]
                 cy = cy_all[best_i]
                 bw = w_all[best_i]
