@@ -214,6 +214,23 @@ def main():
         variants.append(("type+yolo11+cvimodel+ip+labels", f"type: yolo11\ncvimodel: {cvip}\n{common_ip}labels:\n  num: 1\n  names: [\"pokemon\"]\n"))
         variants.append(("type+yolo+cvimodel+ip+labels", f"type: yolo\ncvimodel: {cvip}\n{common_ip}labels:\n  num: 1\n  names: [\"pokemon\"]\n"))
         variants.append(("model_type+yolo11+model+ip+class_names", f"model_type: yolo11\nmodel: {cvip}\n{common_ip}class_names: [\"pokemon\"]\n"))
+        # INI-style [basic]/[extra] variants per MaixCam notes
+        ini_basic = f"[basic]\ntype = cvimodel\nmodel = {cvip}\n\n"
+        ini_extra_common = (
+            "[extra]\n"
+            "input_type = rgb\n"
+            "mean = 0, 0, 0\n"
+            "scale = 0.00392156862745098, 0.00392156862745098, 0.00392156862745098\n"
+            "labels = pokemon\n"
+        )
+        variants.append((
+            "ini-basic-extra-yolov8",
+            ini_basic + "[extra]\nmodel_type = yolov8\n" + ini_extra_common.split("\n",1)[1]
+        ))
+        variants.append((
+            "ini-basic-extra-yolo11",
+            ini_basic + "[extra]\nmodel_type = yolo11\n" + ini_extra_common.split("\n",1)[1]
+        ))
 
         for vname, vtext in variants:
             try:
