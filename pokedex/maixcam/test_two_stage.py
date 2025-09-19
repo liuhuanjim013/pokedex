@@ -78,6 +78,14 @@ def pad_and_clip(x, y, w, h, pad, W, H):
     return x1, y1, x2 - x1 + 1, y2 - y1 + 1
 
 
+def clamp_rect(x, y, w, h, W, H):
+    x = int(max(0, min(x, W - 1)))
+    y = int(max(0, min(y, H - 1)))
+    w = int(max(1, min(w, W - x)))
+    h = int(max(1, min(h, H - y)))
+    return x, y, w, h
+
+
 def get_best_box_yolo(detector, frame_img):
     # Try high-level YOLO API
     try:
@@ -289,10 +297,10 @@ def main():
             cy *= sy
             bw *= sx
             bh *= sy
-            # rect for drawing (no pad)
+            # rect for drawing (no pad) with clamping
             x1 = int(cx - bw / 2)
             y1 = int(cy - bh / 2)
-            rect = (x1, y1, int(bw), int(bh))
+            rect = clamp_rect(x1, y1, int(bw), int(bh), W, H)
             # crop for classifier uses padded & clipped box
             x, y, w, h = pad_and_clip(cx, cy, bw, bh, CROP_PAD, W, H)
             crop = frame.crop(x, y, w, h).resize(CLS_SIZE, CLS_SIZE)
