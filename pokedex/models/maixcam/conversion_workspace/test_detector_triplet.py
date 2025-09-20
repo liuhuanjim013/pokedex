@@ -210,7 +210,7 @@ def ensure_udocker_installed() -> Optional[str]:
 
 
 def run_cvi_in_container(cvi_path: str, input_npz: str, out_npz: str, use_docker: bool, use_udocker: bool) -> None:
-    image = "sophgo/tpuc_dev:latest"
+    image = os.environ.get("TPU_MLIR_IMAGE", "sophgo/tpuc_dev:latest")
     workdir = os.getcwd()
     container_cmd: Optional[List[str]] = None
 
@@ -228,13 +228,32 @@ def run_cvi_in_container(cvi_path: str, input_npz: str, out_npz: str, use_docker
         if not which("udocker") and use_udocker:
             ensure_udocker_installed()
         if which("udocker"):
-            # Pull and create a temp container name based on PID
+            # Prepare udocker runtime (install/setup engines on first use)
+            try:
+                subprocess.run(["udocker", "--allow-root", "install"], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            except Exception:
+                pass
+            try:
+                subprocess.run(["udocker", "--allow-root", "setup"], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            except Exception:
+                pass
+
             cname = f"tpuc_dev_{os.getpid()}"
-            subprocess.run(["udocker", "--allow-root", "pull", image], check=False)
-            subprocess.run(["udocker", "--allow-root", "create", "--name", cname, image], check=False)
+            # Clean stale container if present
+            subprocess.run(["udocker", "--allow-root", "rm", cname], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            # Pull image and create container
+            pr = subprocess.run(["udocker", "--allow-root", "pull", image], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if pr.returncode != 0:
+                raise RuntimeError(f"udocker pull failed for image '{image}': {pr.stderr.strip() or pr.stdout.strip()}")
+
+            cr = subprocess.run(["udocker", "--allow-root", "create", f"--name={cname}", image], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if cr.returncode != 0:
+                raise RuntimeError(f"udocker create failed: {cr.stderr.strip() or cr.stdout.strip()}")
+
             container_cmd = [
                 "udocker", "--allow-root", "run",
-                "-v", f"{workdir}:/workspace",
+                f"-v={workdir}:/workspace",
                 cname,
                 "bash", "-lc",
                 f"/usr/local/bin/model_runner --model /workspace/{cvi_path} --input /workspace/{input_npz} --output /workspace/{out_npz} --dump_all_tensors"
@@ -243,13 +262,13 @@ def run_cvi_in_container(cvi_path: str, input_npz: str, out_npz: str, use_docker
             # Fallback: try host model_runner
             mr = "/usr/local/bin/model_runner"
             if not os.path.exists(mr):
-                raise RuntimeError("No docker/udocker available and host model_runner missing")
+                raise RuntimeError("No docker available; udocker not available or not requested; and host model_runner missing. Install docker or pass --use-udocker, or install model_runner on host.")
             container_cmd = [mr, "--model", cvi_path, "--input", input_npz, "--output", out_npz, "--dump_all_tensors"]
 
     assert container_cmd is not None
     r = subprocess.run(container_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if r.returncode != 0:
-        raise RuntimeError(f"model_runner failed: {r.stderr.strip() or r.stdout.strip()}\nCMD: {' '.join(container_cmd)}")
+        raise RuntimeError(f"model_runner failed: {r.stderr.strip() or r.stdout.strip()}\nCMD: {' '.join(container_cmd)}\nHint: If using udocker, try: export TPU_MLIR_IMAGE=sophgo/tpuc_dev:latest and ensure network access, or try a different tag.")
     if not os.path.exists(out_npz):
         raise RuntimeError("model_runner produced no output")
 
