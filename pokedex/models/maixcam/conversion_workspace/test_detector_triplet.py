@@ -250,7 +250,8 @@ class CVIRunner:
         self.image = os.environ.get("TPU_MLIR_IMAGE", "sophgo/tpuc_dev:latest")
         self.workdir = os.getcwd()
         self.use_docker = use_docker and which("docker") is not None
-        self.use_udocker = (not self.use_docker) and use_udocker
+        # Auto-fallback to udocker if docker is unavailable, even if --use-udocker not passed
+        self.use_udocker = (not self.use_docker) or use_udocker
         self.cname: Optional[str] = None
         self._ensure_tmp_script()
         if self.use_docker:
