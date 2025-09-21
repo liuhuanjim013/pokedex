@@ -1899,6 +1899,21 @@ python scripts/yolo/relabel_for_detector.py \
 - ❌ Two models to manage
 - ❌ Slightly more complex pipeline
 
+### Detector Presence Verification (New Goal)
+
+To ensure the 1-class detector reliably signals the presence/absence of a Pokemon under off-center and partial-visibility conditions, we add a detector validation task across three backends (PyTorch, ONNX, CVI/TPU-MLIR):
+
+- Augment evaluation images to produce three variants per sample at detector input size (256×256):
+  - orig: resized original
+  - offcenter: object shrunk and placed off-center on a neutral background
+  - absent: uniform background (no object)
+- Batch detection by backend for speed: run all with PT, then ONNX, then CVI
+- Decide presence by score threshold (default conf ≥ 0.35)
+- Compare presence decisions across backends; when two or more signal presence, compute pairwise IoU and flag inconsistencies below IoU≥0.30
+- Record inputs/outputs per variant to facilitate debugging and CVI improvements on MaixCam
+
+Implementation reference: `models/maixcam/conversion_workspace/test_detector_triplet.py`.
+
 ### Option 3: Single-Stage with Graph-Level ArgMax ⚙️ **ADVANCED - REQUIRES EXPORT MODIFICATION**
 
 **When to Use**: Want single model, willing to modify export pipeline
