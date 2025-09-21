@@ -214,14 +214,51 @@ def run_cvi_in_container(cvi_path: str, input_npz: str, out_npz: str, use_docker
     workdir = os.getcwd()
     container_cmd: Optional[List[str]] = None
 
+    # Write a container-side runner script that resolves model_runner tool
+    tmp_script = os.path.join(workdir, ".tmp_triplet_runner.sh")
+    script_body = r'''set -euo pipefail
+cd /workspace
+echo "📦 Inside container: $(python3 -V)"
+
+WHEEL="/workspace/pokedex/models/maixcam/conversion_workspace/tpu_mlir_packages/tpu_mlir-1.21.1-py3-none-any.whl"
+if python3 -c "import tpu_mlir" 2>/dev/null; then
+  echo '✅ TPU-MLIR present'
+else
+  echo '📦 Installing TPU-MLIR==1.21.1 ...'
+  if [ -f "$WHEEL" ]; then
+    python3 -m pip install -q --no-cache-dir "$WHEEL"
+  else
+    python3 -m pip install -q --no-cache-dir tpu-mlir==1.21.1
+  fi
+fi
+
+RUNNER=""
+if command -v model_runner >/dev/null 2>&1; then
+  RUNNER="model_runner"
+elif [ -f "/usr/local/bin/model_runner.py" ]; then
+  RUNNER="python3 /usr/local/bin/model_runner.py"
+else
+  RUNNER="python3 -m tpu_mlir.tools.model_runner"
+fi
+
+echo "▶️  $RUNNER --model $MODEL --input $INPUT --output $OUTPUT --dump_all_tensors"
+$RUNNER --model "$MODEL" --input "$INPUT" --output "$OUTPUT" --dump_all_tensors
+'''
+    with open(tmp_script, "w", encoding="utf-8") as f:
+        f.write(script_body)
+
     if use_docker and which("docker"):
         subprocess.run(["docker", "pull", image], check=False)
         container_cmd = [
             "docker", "run", "--rm",
+            "-e", "PYTHONUNBUFFERED=1",
+            "-e", f"MODEL=/workspace/{cvi_path}",
+            "-e", f"INPUT=/workspace/{input_npz}",
+            "-e", f"OUTPUT=/workspace/{out_npz}",
             "-v", f"{workdir}:/workspace",
             image,
             "bash", "-lc",
-            f"/usr/local/bin/model_runner --model /workspace/{cvi_path} --input /workspace/{input_npz} --output /workspace/{out_npz} --dump_all_tensors"
+            "bash /workspace/.tmp_triplet_runner.sh"
         ]
     else:
         # Try udocker
@@ -253,10 +290,14 @@ def run_cvi_in_container(cvi_path: str, input_npz: str, out_npz: str, use_docker
 
             container_cmd = [
                 "udocker", "--allow-root", "run",
+                f"-e=PYTHONUNBUFFERED=1",
+                f"-e=MODEL=/workspace/{cvi_path}",
+                f"-e=INPUT=/workspace/{input_npz}",
+                f"-e=OUTPUT=/workspace/{out_npz}",
                 f"-v={workdir}:/workspace",
                 cname,
                 "bash", "-lc",
-                f"/usr/local/bin/model_runner --model /workspace/{cvi_path} --input /workspace/{input_npz} --output /workspace/{out_npz} --dump_all_tensors"
+                "bash /workspace/.tmp_triplet_runner.sh"
             ]
         else:
             # Fallback: try host model_runner
