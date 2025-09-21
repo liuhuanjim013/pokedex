@@ -360,108 +360,6 @@ $RUNNER --model "$MODEL" --input "$INPUT" --output "$OUTPUT" --dump_all_tensors
 def run_cvi_in_container(cvi_path: str, input_npz: str, out_npz: str, use_docker: bool, use_udocker: bool) -> None:
     runner = CVIRunner(use_docker=use_docker, use_udocker=use_udocker)
     runner.run(cvi_path, input_npz, out_npz)
-    image = os.environ.get("TPU_MLIR_IMAGE", "sophgo/tpuc_dev:latest")
-    workdir = os.getcwd()
-    container_cmd: Optional[List[str]] = None
-
-    # Write a container-side runner script that resolves model_runner tool
-    tmp_script = os.path.join(workdir, ".tmp_triplet_runner.sh")
-    script_body = r'''set -euo pipefail
-cd /workspace
-echo "📦 Inside container: $(python3 -V)"
-
-WHEEL="/workspace/pokedex/models/maixcam/conversion_workspace/tpu_mlir_packages/tpu_mlir-1.21.1-py3-none-any.whl"
-if python3 -c "import tpu_mlir" 2>/dev/null; then
-  echo '✅ TPU-MLIR present'
-else
-  echo '📦 Installing TPU-MLIR==1.21.1 ...'
-  if [ -f "$WHEEL" ]; then
-    python3 -m pip install -q --no-cache-dir "$WHEEL"
-  else
-    python3 -m pip install -q --no-cache-dir tpu-mlir==1.21.1
-  fi
-fi
-
-RUNNER=""
-if command -v model_runner >/dev/null 2>&1; then
-  RUNNER="model_runner"
-elif [ -f "/usr/local/bin/model_runner.py" ]; then
-  RUNNER="python3 /usr/local/bin/model_runner.py"
-else
-  RUNNER="python3 -m tpu_mlir.tools.model_runner"
-fi
-
-echo "▶️  $RUNNER --model $MODEL --input $INPUT --output $OUTPUT --dump_all_tensors"
-$RUNNER --model "$MODEL" --input "$INPUT" --output "$OUTPUT" --dump_all_tensors
-'''
-    with open(tmp_script, "w", encoding="utf-8") as f:
-        f.write(script_body)
-
-    if use_docker and which("docker"):
-        subprocess.run(["docker", "pull", image], check=False)
-        container_cmd = [
-            "docker", "run", "--rm",
-            "-e", "PYTHONUNBUFFERED=1",
-            "-e", f"MODEL=/workspace/{cvi_path}",
-            "-e", f"INPUT=/workspace/{input_npz}",
-            "-e", f"OUTPUT=/workspace/{out_npz}",
-            "-v", f"{workdir}:/workspace",
-            image,
-            "bash", "-lc",
-            "bash /workspace/.tmp_triplet_runner.sh"
-        ]
-    else:
-        # Try udocker
-        if not which("udocker") and use_udocker:
-            ensure_udocker_installed()
-        if which("udocker"):
-            # Prepare udocker runtime (install/setup engines on first use)
-            try:
-                subprocess.run(["udocker", "--allow-root", "install"], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            except Exception:
-                pass
-            try:
-                subprocess.run(["udocker", "--allow-root", "setup"], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            except Exception:
-                pass
-
-            cname = f"tpuc_dev_{os.getpid()}"
-            # Clean stale container if present
-            subprocess.run(["udocker", "--allow-root", "rm", cname], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-            # Pull image and create container
-            pr = subprocess.run(["udocker", "--allow-root", "pull", image], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            if pr.returncode != 0:
-                raise RuntimeError(f"udocker pull failed for image '{image}': {pr.stderr.strip() or pr.stdout.strip()}")
-
-            cr = subprocess.run(["udocker", "--allow-root", "create", f"--name={cname}", image], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            if cr.returncode != 0:
-                raise RuntimeError(f"udocker create failed: {cr.stderr.strip() or cr.stdout.strip()}")
-
-            container_cmd = [
-                "udocker", "--allow-root", "run",
-                f"-e=PYTHONUNBUFFERED=1",
-                f"-e=MODEL=/workspace/{cvi_path}",
-                f"-e=INPUT=/workspace/{input_npz}",
-                f"-e=OUTPUT=/workspace/{out_npz}",
-                f"-v={workdir}:/workspace",
-                cname,
-                "bash", "-lc",
-                "bash /workspace/.tmp_triplet_runner.sh"
-            ]
-        else:
-            # Fallback: try host model_runner
-            mr = "/usr/local/bin/model_runner"
-            if not os.path.exists(mr):
-                raise RuntimeError("No docker available; udocker not available or not requested; and host model_runner missing. Install docker or pass --use-udocker, or install model_runner on host.")
-            container_cmd = [mr, "--model", cvi_path, "--input", input_npz, "--output", out_npz, "--dump_all_tensors"]
-
-    assert container_cmd is not None
-    r = subprocess.run(container_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    if r.returncode != 0:
-        raise RuntimeError(f"model_runner failed: {r.stderr.strip() or r.stdout.strip()}\nCMD: {' '.join(container_cmd)}\nHint: If using udocker, try: export TPU_MLIR_IMAGE=sophgo/tpuc_dev:latest and ensure network access, or try a different tag.")
-    if not os.path.exists(out_npz):
-        raise RuntimeError("model_runner produced no output")
 
 
 def run_cvi_detector(cvi_path: str, img_bgr: np.ndarray, det_size: int, out_dir: str, use_docker: bool, use_udocker: bool) -> Tuple[Tuple[float, float, float, float], float]:
@@ -535,7 +433,7 @@ def main() -> int:
             box, score = run_onnx_detector(args.onnx_path, vbgr, args.det_size, out_dir)
             present = score >= args.presence_thr
             results.setdefault(key, {})["onnx"] = (box, score, present)
-    	except Exception as e:
+        except Exception as e:
             results.setdefault(key, {})["onnx_err"] = ((0.0, 0.0, 0.0, 0.0), 0.0, False)
             print(f"ONNX fail [{img_path} {vname}]: {e}")
 
