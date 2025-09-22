@@ -142,7 +142,7 @@ $MT --model_name pokemon_det1 --model_def "$DET_ONNX" \
     --mlir pokemon_det1.mlir
 
 echo "🧮 Calibrate DET"
-$RC pokemon_det1.mlir --dataset "$DET_DIR" --input_num 256 \
+$RC pokemon_det1.mlir --dataset "$DET_DIR" --input_num 768 \
     -o pokemon_det1_cali_table
 
 echo "🏗️  Deploy DET"
@@ -158,7 +158,7 @@ $MT --model_name pokemon_cls1025 --model_def "$CLS_ONNX" \
     --mlir pokemon_cls1025.mlir
 
 echo "🧮 Calibrate CLS"
-$RC pokemon_cls1025.mlir --dataset "$CLS_DIR" --input_num 256 \
+$RC pokemon_cls1025.mlir --dataset "$CLS_DIR" --input_num 512 \
     -o pokemon_cls1025_cali_table
 
 echo "🏗️  Deploy CLS"

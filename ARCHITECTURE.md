@@ -1914,6 +1914,48 @@ To ensure the 1-class detector reliably signals the presence/absence of a Pokemo
 
 Implementation reference: `models/maixcam/conversion_workspace/test_detector_triplet.py`.
 
+#### Training and Calibration Plan for Reliable Presence and Off-Center Bounding Boxes
+
+Objective: The detector must (1) reliably signal “no Pokémon present” and (2) output a correct off-center bounding box to guide users to center the camera, thereby improving downstream classification.
+
+1) Detector Dataset and Training (YOLO11n, nc=1, imgsz=256)
+- Positive samples: reuse existing Pokémon images and labels, relabeled to class 0 (pokemon).
+- Negative samples (new): synthetic and natural negatives with empty labels to teach absence.
+  - Synthetic: solid gray/white/colored canvases, Gaussian/noise backgrounds, gradients.
+  - Optional natural: backgrounds from non-Pokémon corpora or blurred dataset crops with labels removed.
+- Augmentations to improve off-center robustness:
+  - translate=0.20, scale=0.50, degrees=5, fliplr=0.5, hsv jitter (h=0.015, s=0.70, v=0.40), mosaic=0.10, mixup=0.0
+  - Intuition: shrink-and-shift forces network to localize off-center Pokémon; small mosaic improves diversity without destabilizing training.
+- Presence threshold policy: default conf ≥ 0.35; can be tuned post-quantization.
+
+2) Calibration Dataset for CVI (TPU-MLIR, INT8)
+- Calibration set must match deployment domain, not just centered crops:
+  - Include off-center/shrunk positives (similar to training augmentations).
+  - Include negatives (solid colors, colored/noise/gradient backgrounds, optional natural backgrounds).
+  - Mix ~60% positive, ~40% negative to calibrate score dynamic range.
+- Increase calibration coverage:
+  - Detector input_num: 768 (was 256)
+  - Classifier input_num: 512 (was 256)
+
+3) Evaluation and Thresholding
+- Use `test_detector_triplet.py` to validate across PT/ONNX/CVI on:
+  - orig (center/large), offcenter (shrink-and-shift), absent (background only)
+- Metrics:
+  - Presence accuracy on negatives (CVI conf < threshold)
+  - IoU on off-center positives vs PT/ONNX and synthetic GT
+  - Consistency PT↔ONNX↔CVI (IoU ≥ 0.30 when present)
+- Tune `conf_threshold` in `pokemon_det1.mud` if needed.
+
+4) Script Changes
+- Training: `pokedex/scripts/yolo/train_yolov11_two_stage.py`
+  - Adds empty-label negatives generation per split (train/val/test)
+  - Enables stronger translate/scale/hsv and light mosaic, disables mixup
+- Conversion: `pokedex/models/maixcam/conversion_workspace/run_tpu_mlir_two_stage_udocker.sh`
+  - Raises detector calibration input_num to 768 and classifier to 512
+  - Expect `DET_DIR` to contain off-center and negative samples reflected in `DET_LIST`
+
+Acceptance: CVI detector must output low confidence on negatives, and reasonable off-center boxes (IoU ≥ 0.30 vs PT/ONNX/GT) on positives.
+
 ### Option 3: Single-Stage with Graph-Level ArgMax ⚙️ **ADVANCED - REQUIRES EXPORT MODIFICATION**
 
 **When to Use**: Want single model, willing to modify export pipeline

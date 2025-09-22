@@ -200,6 +200,56 @@ def ensure_det1_dataset(yolo_root: Path, det_root: Path, logger: logging.Logger)
             except Exception as e:
                 logger.warning(f"Failed to rewrite label {lbl_path}: {e}")
 
+        # Add synthetic negatives (empty labels) to improve presence detection
+        try:
+            from PIL import Image
+            import numpy as np
+        except Exception as e:
+            logger.warning(f"PIL/numpy not available for negative generation: {e}")
+            continue
+
+        def _save_jpg(img_arr: np.ndarray, out_path: Path) -> None:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            img = Image.fromarray(img_arr.astype(np.uint8), mode="RGB")
+            img.save(str(out_path), format="JPEG", quality=90)
+
+        # target size close to detector input; Ultralytics will resize as needed
+        size = 256
+        rng = np.random.default_rng(2025)
+        if split == "train":
+            num_negs = 500
+        elif split == "validation":
+            num_negs = 200
+        else:
+            num_negs = 200
+
+        logger.info(f"Generating {num_negs} negative images for split '{split}' …")
+        for i in range(num_negs):
+            mode = i % 4
+            if mode == 0:
+                # solid gray
+                arr = np.full((size, size, 3), 127, dtype=np.uint8)
+            elif mode == 1:
+                # solid random color
+                color = rng.integers(0, 256, size=3, dtype=np.uint8)
+                arr = np.tile(color[None, None, :], (size, size, 1))
+            elif mode == 2:
+                # gaussian noise
+                arr = rng.normal(loc=128, scale=40, size=(size, size, 3)).clip(0, 255).astype(np.uint8)
+            else:
+                # horizontal gradient
+                x = np.linspace(0, 255, size, dtype=np.uint8)
+                arr = np.dstack([np.tile(x, (size, 1)), np.full((size, size), 128, np.uint8), np.flipud(np.tile(x, (size, 1)))])
+
+            neg_stem = f"neg_{i:05d}"
+            out_img = dst_img_dir / f"{neg_stem}.jpg"
+            out_lbl = dst_lbl_dir / f"{neg_stem}.txt"
+            if not out_img.exists():
+                _save_jpg(arr, out_img)
+            if not out_lbl.exists():
+                with open(out_lbl, "w", encoding="utf-8") as f:
+                    f.write("")  # empty label => no objects
+
 
 def write_det1_yaml(template_yaml: Path, out_yaml: Path, det_root: Path, logger: logging.Logger) -> None:
     """Write a detector YAML pointing to det_root using the known subpaths."""
@@ -245,6 +295,9 @@ def main() -> None:
         det_train_cmd = (
             f"yolo detect train model={args.det_model} data={det_yaml_autogen} "
             f"imgsz={args.det_imgsz} epochs={args.det_epochs} batch={args.det_batch} "
+            # Augmentations to improve off-center robustness
+            f"degrees=5 translate=0.20 scale=0.50 shear=0.0 flipud=0.0 fliplr=0.5 "
+            f"hsv_h=0.015 hsv_s=0.70 hsv_v=0.40 mosaic=0.10 mixup=0.0 "
             f"cos_lr=True project=runs name={args.det_run_name} exist_ok=True save_period=1"
         )
     run_cmd(det_train_cmd, logger)
