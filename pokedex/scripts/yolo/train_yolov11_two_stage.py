@@ -84,24 +84,25 @@ def _class_dir_name(pokemon_id: str) -> str:
 
 
 def _find_latest_run_dir(task: str, base_name: str) -> Path:
-    """Find an existing Ultralytics run dir that matches base_name or base_name<idx> under runs/<task>/.
+    """Find an existing Ultralytics run dir matching base_name (or base_name*) under runs/ and runs/<task>/.
 
     Returns Path('') if none found.
     """
-    task_root = Path("runs") / task
-    if not task_root.exists():
-        return Path("")
-    # Exact match first
-    exact = task_root / base_name
-    if exact.exists():
-        return exact
-    # Fuzzy match: base_name, base_name2, base_name3 ... pick most recent mtime
+    search_roots = [Path("runs"), Path("runs") / task]
     candidates = []
-    for d in task_root.iterdir():
-        if not d.is_dir():
+    for root in search_roots:
+        if not root.exists():
             continue
-        if d.name == base_name or d.name.startswith(base_name):
-            candidates.append((d.stat().st_mtime, d))
+        # Exact match first
+        exact = root / base_name
+        if exact.exists():
+            candidates.append((exact.stat().st_mtime, exact))
+        # Fuzzy matches
+        for d in root.iterdir():
+            if not d.is_dir():
+                continue
+            if d.name == base_name or d.name.startswith(base_name):
+                candidates.append((d.stat().st_mtime, d))
     if not candidates:
         return Path("")
     candidates.sort(key=lambda x: x[0], reverse=True)
@@ -292,7 +293,7 @@ def main() -> None:
 
     # Build detector train/export flow with resume/skip logic
     resolved_det_dir = _find_latest_run_dir("detect", args.det_run_name)
-    det_run_dir = resolved_det_dir if resolved_det_dir else (Path("runs") / "detect" / args.det_run_name)
+    det_run_dir = resolved_det_dir if resolved_det_dir else (Path("runs") / args.det_run_name)
     det_last = det_run_dir / "weights" / "last.pt"
     det_best_path = det_run_dir / "weights" / "best.pt"
     yolo_cli = _yolo_cli()
@@ -340,7 +341,7 @@ def main() -> None:
 
     # Build classifier train/export flow with resume/skip logic
     resolved_cls_dir = _find_latest_run_dir("classify", args.cls_run_name)
-    cls_run_dir = resolved_cls_dir if resolved_cls_dir else (Path("runs") / "classify" / args.cls_run_name)
+    cls_run_dir = resolved_cls_dir if resolved_cls_dir else (Path("runs") / args.cls_run_name)
     cls_last = cls_run_dir / "weights" / "last.pt"
     cls_best_path = cls_run_dir / "weights" / "best.pt"
     if args.export and cls_best_path.exists():
