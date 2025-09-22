@@ -70,6 +70,14 @@ def parse_args() -> argparse.Namespace:
                         help="Directory to copy exports into")
     parser.add_argument("--no-resume", action="store_true", help="Disable auto-resume if checkpoints exist")
     return parser.parse_args()
+
+
+def _yolo_cli() -> str:
+    """Return the YOLO CLI launcher. Prefer 'yolo' if on PATH, else 'python -m ultralytics'."""
+    if shutil.which("yolo"):
+        return "yolo"
+    # Fallback to python -m ultralytics
+    return f"{sys.executable} -m ultralytics"
 def _class_dir_name(pokemon_id: str) -> str:
     name = POKEMON_NAMES.get(pokemon_id, None)
     return f"{pokemon_id}_{name}" if name else pokemon_id
@@ -287,13 +295,15 @@ def main() -> None:
     resolved_det_dir = _find_latest_run_dir("detect", args.det_run_name)
     det_run_dir = resolved_det_dir if resolved_det_dir else (Path("runs") / "detect" / args.det_run_name)
     det_last = det_run_dir / "weights" / "last.pt"
+    yolo_cli = _yolo_cli()
+
     if det_last.exists() and not args.no_resume:
         det_train_cmd = (
-            f"yolo detect train resume=True project=runs name={det_run_dir.name} exist_ok=True save_period=1"
+            f"{yolo_cli} detect train resume=True project=runs name={det_run_dir.name} exist_ok=True save_period=1"
         )
     else:
         det_train_cmd = (
-            f"yolo detect train model={args.det_model} data={det_yaml_autogen} "
+            f"{yolo_cli} detect train model={args.det_model} data={det_yaml_autogen} "
             f"imgsz={args.det_imgsz} epochs={args.det_epochs} batch={args.det_batch} "
             # Augmentations to improve off-center robustness
             f"degrees=5 translate=0.20 scale=0.50 shear=0.0 flipud=0.0 fliplr=0.5 "
@@ -309,7 +319,7 @@ def main() -> None:
 
     if args.export:
         det_export_cmd = (
-            f"yolo export model={det_best} format=onnx opset={args.opset} "
+            f"{yolo_cli} export model={det_best} format=onnx opset={args.opset} "
             f"imgsz={args.det_imgsz} dynamic=False simplify=True"
         )
         run_cmd(det_export_cmd, logger)
@@ -331,11 +341,11 @@ def main() -> None:
     cls_last = cls_run_dir / "weights" / "last.pt"
     if cls_last.exists() and not args.no_resume:
         cls_train_cmd = (
-            f"yolo classify train resume=True project=runs name={cls_run_dir.name} exist_ok=True save_period=1"
+            f"{yolo_cli} classify train resume=True project=runs name={cls_run_dir.name} exist_ok=True save_period=1"
         )
     else:
         cls_train_cmd = (
-            f"yolo classify train model={args.cls_model} data={args.cls_data} "
+            f"{yolo_cli} classify train model={args.cls_model} data={args.cls_data} "
             f"imgsz={args.cls_imgsz} epochs={args.cls_epochs} batch={args.cls_batch} "
             f"cos_lr=True project=runs name={args.cls_run_name} exist_ok=True save_period=1"
         )
@@ -347,7 +357,7 @@ def main() -> None:
 
     if args.export:
         cls_export_cmd = (
-            f"yolo export model={cls_best} format=onnx opset={args.opset} "
+            f"{yolo_cli} export model={cls_best} format=onnx opset={args.opset} "
             f"imgsz={args.cls_imgsz} dynamic=False simplify=True"
         )
         run_cmd(cls_export_cmd, logger)
