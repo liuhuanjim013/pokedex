@@ -290,41 +290,44 @@ def main() -> None:
     det_yaml_autogen = Path("configs/yolov11/pokemon_det1_autogen.yaml")
     write_det1_yaml(Path(args.det_data), det_yaml_autogen, det_out_root, logger)
 
-    # Build detector train command with auto-resume if last.pt exists
-    # Resolve existing run directory (handles name, name2, ...)
+    # Build detector train/export flow with resume/skip logic
     resolved_det_dir = _find_latest_run_dir("detect", args.det_run_name)
     det_run_dir = resolved_det_dir if resolved_det_dir else (Path("runs") / "detect" / args.det_run_name)
     det_last = det_run_dir / "weights" / "last.pt"
+    det_best_path = det_run_dir / "weights" / "best.pt"
     yolo_cli = _yolo_cli()
 
-    if det_last.exists() and not args.no_resume:
-        det_train_cmd = (
-            f"{yolo_cli} detect train resume=True project=runs name={det_run_dir.name} exist_ok=True save_period=1"
-        )
+    if args.export and det_best_path.exists():
+        logger.info(f"Detector best.pt found at {det_best_path}, skipping training and exporting only.")
     else:
-        det_train_cmd = (
-            f"{yolo_cli} detect train model={args.det_model} data={det_yaml_autogen} "
-            f"imgsz={args.det_imgsz} epochs={args.det_epochs} batch={args.det_batch} "
-            # Augmentations to improve off-center robustness
-            f"degrees=5 translate=0.20 scale=0.50 shear=0.0 flipud=0.0 fliplr=0.5 "
-            f"hsv_h=0.015 hsv_s=0.70 hsv_v=0.40 mosaic=0.10 mixup=0.0 "
-            f"cos_lr=True project=runs name={args.det_run_name} exist_ok=True save_period=1"
-        )
-    run_cmd(det_train_cmd, logger)
-
-    det_best = f"runs/detect/{det_run_dir.name}/weights/best.pt"
-    if not Path(det_best).exists():
-        # fallback to default Ultralytics path
-        det_best = "runs/detect/train/weights/best.pt"
+        if det_last.exists() and not args.no_resume:
+            det_train_cmd = (
+                f"{yolo_cli} detect train resume=True project=runs name={det_run_dir.name} exist_ok=True save_period=1"
+            )
+        else:
+            det_train_cmd = (
+                f"{yolo_cli} detect train model={args.det_model} data={det_yaml_autogen} "
+                f"imgsz={args.det_imgsz} epochs={args.det_epochs} batch={args.det_batch} "
+                # Augmentations to improve off-center robustness
+                f"degrees=5 translate=0.20 scale=0.50 shear=0.0 flipud=0.0 fliplr=0.5 "
+                f"hsv_h=0.015 hsv_s=0.70 hsv_v=0.40 mosaic=0.10 mixup=0.0 "
+                f"cos_lr=True project=runs name={args.det_run_name} exist_ok=True save_period=1"
+            )
+        run_cmd(det_train_cmd, logger)
+        # refresh paths in case Ultralytics created a new indexed run dir
+        det_run_dir = _find_latest_run_dir("detect", args.det_run_name) or det_run_dir
+        det_best_path = (det_run_dir / "weights" / "best.pt")
 
     if args.export:
+        # fallback if best not found
+        det_best_str = str(det_best_path if det_best_path.exists() else Path("runs/detect/train/weights/best.pt"))
         det_export_cmd = (
-            f"{yolo_cli} export model={det_best} format=onnx opset={args.opset} "
+            f"{yolo_cli} export model={det_best_str} format=onnx opset={args.opset} "
             f"imgsz={args.det_imgsz} dynamic=False simplify=True"
         )
         run_cmd(det_export_cmd, logger)
 
-        det_onnx = Path(det_best).with_suffix(".onnx")
+        det_onnx = Path(det_best_str).with_suffix(".onnx")
         if det_onnx.exists():
             run_cmd(f"cp {det_onnx} {os.path.join(args.outdir, 'best_det.onnx')}", logger)
 
@@ -335,34 +338,37 @@ def main() -> None:
     except Exception as e:
         logger.warning(f"Failed to auto-build classification dataset: {e}")
 
-    # Build classifier train command with auto-resume if last.pt exists
+    # Build classifier train/export flow with resume/skip logic
     resolved_cls_dir = _find_latest_run_dir("classify", args.cls_run_name)
     cls_run_dir = resolved_cls_dir if resolved_cls_dir else (Path("runs") / "classify" / args.cls_run_name)
     cls_last = cls_run_dir / "weights" / "last.pt"
-    if cls_last.exists() and not args.no_resume:
-        cls_train_cmd = (
-            f"{yolo_cli} classify train resume=True project=runs name={cls_run_dir.name} exist_ok=True save_period=1"
-        )
+    cls_best_path = cls_run_dir / "weights" / "best.pt"
+    if args.export and cls_best_path.exists():
+        logger.info(f"Classifier best.pt found at {cls_best_path}, skipping training and exporting only.")
     else:
-        cls_train_cmd = (
-            f"{yolo_cli} classify train model={args.cls_model} data={args.cls_data} "
-            f"imgsz={args.cls_imgsz} epochs={args.cls_epochs} batch={args.cls_batch} "
-            f"cos_lr=True project=runs name={args.cls_run_name} exist_ok=True save_period=1"
-        )
-    run_cmd(cls_train_cmd, logger)
-
-    cls_best = f"runs/classify/{cls_run_dir.name}/weights/best.pt"
-    if not Path(cls_best).exists():
-        cls_best = "runs/classify/train/weights/best.pt"
+        if cls_last.exists() and not args.no_resume:
+            cls_train_cmd = (
+                f"{yolo_cli} classify train resume=True project=runs name={cls_run_dir.name} exist_ok=True save_period=1"
+            )
+        else:
+            cls_train_cmd = (
+                f"{yolo_cli} classify train model={args.cls_model} data={args.cls_data} "
+                f"imgsz={args.cls_imgsz} epochs={args.cls_epochs} batch={args.cls_batch} "
+                f"cos_lr=True project=runs name={args.cls_run_name} exist_ok=True save_period=1"
+            )
+        run_cmd(cls_train_cmd, logger)
+        cls_run_dir = _find_latest_run_dir("classify", args.cls_run_name) or cls_run_dir
+        cls_best_path = (cls_run_dir / "weights" / "best.pt")
 
     if args.export:
+        cls_best_str = str(cls_best_path if cls_best_path.exists() else Path("runs/classify/train/weights/best.pt"))
         cls_export_cmd = (
-            f"{yolo_cli} export model={cls_best} format=onnx opset={args.opset} "
+            f"{yolo_cli} export model={cls_best_str} format=onnx opset={args.opset} "
             f"imgsz={args.cls_imgsz} dynamic=False simplify=True"
         )
         run_cmd(cls_export_cmd, logger)
 
-        cls_onnx = Path(cls_best).with_suffix(".onnx")
+        cls_onnx = Path(cls_best_str).with_suffix(".onnx")
         if cls_onnx.exists():
             run_cmd(f"cp {cls_onnx} {os.path.join(args.outdir, 'best_cls.onnx')}", logger)
 
