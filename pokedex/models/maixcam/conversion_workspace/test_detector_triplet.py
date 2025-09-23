@@ -205,12 +205,19 @@ def run_onnx_detector(onnx_path: str, img_bgr: np.ndarray, det_size: int, out_di
         key = out_names[i] if out_names and i < len(out_names) else f"out{i}"
         outs_dict[key] = arr
 
-    # Expect 5 channels: cx, cy, w, h, score
-    key, packed = find_packed_by_channels(outs_dict, 5)
-    if packed is None:
-        raise RuntimeError("ONNX: Detector packed output (5 channels) not found")
-    bbox = packed[0:4, :]  # (4, P)
-    score = sigmoid(packed[4, :])
+    # Prefer 6 channels: [cx, cy, w, h, obj, cls] for 1-class; fallback to 5: [cx, cy, w, h, score]
+    key6, packed6 = find_packed_by_channels(outs_dict, 6)
+    if packed6 is not None:
+        bbox = packed6[0:4, :]
+        obj = sigmoid(packed6[4, :])
+        cls = sigmoid(packed6[5, :])
+        score = obj * cls
+    else:
+        key5, packed5 = find_packed_by_channels(outs_dict, 5)
+        if packed5 is None:
+            raise RuntimeError("ONNX: Detector packed output (5 or 6 channels) not found")
+        bbox = packed5[0:4, :]
+        score = sigmoid(packed5[4, :])
     pos = int(np.argmax(score))
     bb = bbox[:, pos]
     return (float(bb[0]), float(bb[1]), float(bb[2]), float(bb[3])), float(score[pos])
@@ -372,11 +379,19 @@ def run_cvi_detector(cvi_path: str, img_bgr: np.ndarray, det_size: int, out_dir:
     run_cvi_in_container(cvi_path, in_npz, out_npz, use_docker, use_udocker)
 
     outs = load_npz_outputs(out_npz)
-    key, packed = find_packed_by_channels(outs, 5)
-    if packed is None:
-        raise RuntimeError("CVI: Detector packed output (5 channels) not found")
-    bbox = packed[0:4, :]
-    score = sigmoid(packed[4, :])
+    # Prefer 6 channels: [cx, cy, w, h, obj, cls] for 1-class; fallback to 5
+    key6, packed6 = find_packed_by_channels(outs, 6)
+    if packed6 is not None:
+        bbox = packed6[0:4, :]
+        obj = sigmoid(packed6[4, :])
+        cls = sigmoid(packed6[5, :])
+        score = obj * cls
+    else:
+        key5, packed5 = find_packed_by_channels(outs, 5)
+        if packed5 is None:
+            raise RuntimeError("CVI: Detector packed output (5 or 6 channels) not found")
+        bbox = packed5[0:4, :]
+        score = sigmoid(packed5[4, :])
     pos = int(np.argmax(score))
     bb = bbox[:, pos]
     return (float(bb[0]), float(bb[1]), float(bb[2]), float(bb[3])), float(score[pos])
