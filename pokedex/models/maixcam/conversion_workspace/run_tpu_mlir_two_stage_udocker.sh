@@ -11,8 +11,8 @@ CONTAINER_NAME="tpu_mlir_two_stage"
 CHIP="cv181x"   # Default target per MaixCam doc; override with CHIP env if needed
 
 # Defaults use your latest run dirs; override via env or args if needed
-DET_ONNX_DEFAULT="runs/pokemon_det1_yolo11n_2565/weights/best.onnx"
-CLS_ONNX_DEFAULT="runs/pokemon_cls1025_yolo11n_2242/weights/best.onnx"
+DET_ONNX_DEFAULT="models/maixcam/exports/best_det.onnx"
+CLS_ONNX_DEFAULT="models/maixcam/exports/best_cls.onnx"
 
 DET_LIST_DEFAULT="data/calib_det_list.txt"
 DET_DIR_DEFAULT="data/calib_det"
@@ -62,6 +62,9 @@ echo "✅ Classifier ONNX: $CLS_ONNX"
 echo "✅ Det calib list: $DET_LIST (dir: $DET_DIR)"
 echo "✅ Cls calib list: $CLS_LIST (dir: $CLS_DIR)"
 echo "📁 Output dir: $OUT_DIR"
+if [ -f "$DET_LIST" ]; then
+  echo "🧮 Det calib count: $(wc -l < "$DET_LIST" | tr -d ' ') entries"
+fi
 
 # -------- choose runtime: docker > udocker --------
 RUN_MODE="udocker"
@@ -153,7 +156,7 @@ $MT --model_name pokemon_det1 --model_def "$DET_ONNX" \
     --mlir pokemon_det1.mlir
 
 echo "🧮 Calibrate DET"
-$RC pokemon_det1.mlir --dataset "$DET_DIR" --input_num 768 \
+$RC pokemon_det1.mlir --dataset "$DET_DIR" --input_num 2048 \
     -o pokemon_det1_cali_table
 
 echo "🏗️  Deploy DET"
