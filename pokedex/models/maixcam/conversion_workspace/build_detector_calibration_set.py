@@ -11,7 +11,7 @@ Usage (defaults are sensible for this repo):
     --src-images data/yolo_dataset/train/images \
     --out-dir data/calib_det \
     --list-path data/calib_det_list.txt \
-    --imgsz 256 --num-pos 600 --num-neg 400 --seed 0
+    --imgsz 256 --num-pos 2000 --num-center 500 --num-neg 1500 --seed 0
 """
 
 import argparse
@@ -34,8 +34,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--list-path", type=str, default="data/calib_det_list.txt",
                    help="Path to write absolute list of calibration images")
     p.add_argument("--imgsz", type=int, default=256, help="Calibration image size (square)")
-    p.add_argument("--num-pos", type=int, default=600, help="Number of off-center positive samples")
-    p.add_argument("--num-neg", type=int, default=400, help="Number of negative background samples")
+    p.add_argument("--num-pos", type=int, default=2000, help="Number of off-center positive samples")
+    p.add_argument("--num-center", type=int, default=500, help="Number of centered positive samples")
+    p.add_argument("--num-neg", type=int, default=1500, help="Number of negative background samples")
     p.add_argument("--seed", type=int, default=0, help="Random seed")
     return p.parse_args()
 
@@ -84,6 +85,12 @@ def make_negative(kind: int, size: int, rng_np: np.random.Generator) -> np.ndarr
     ])
 
 
+def make_center(img: np.ndarray, size: int) -> np.ndarray:
+    if img is None or img.size == 0:
+        return np.full((size, size, 3), 127, dtype=np.uint8)
+    return cv2.resize(img, (size, size), interpolation=cv2.INTER_LINEAR)
+
+
 def main() -> int:
     args = parse_args()
     out_dir = Path(args.out_dir)
@@ -94,13 +101,13 @@ def main() -> int:
     # Collect positives
     src_imgs = find_images(args.src_images)
     rng.shuffle(src_imgs)
-    src_imgs = src_imgs[: args.num_pos * 2]  # oversample a bit in case of read failures
+    src_for_pos = src_imgs[: max(args.num_pos * 2, args.num_pos + args.num_center)]  # oversample
 
     written: List[str] = []
 
     # Write off-center positives
     pos_written = 0
-    for i, p in enumerate(src_imgs):
+    for i, p in enumerate(src_for_pos):
         if pos_written >= args.num_pos:
             break
         im = cv2.imread(p, cv2.IMREAD_COLOR)
@@ -111,6 +118,21 @@ def main() -> int:
         cv2.imwrite(str(op), out, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
         written.append(str(op.resolve()))
         pos_written += 1
+
+    # Write centered positives
+    ctr_written = 0
+    if args.num_center > 0:
+        for i, p in enumerate(src_for_pos):
+            if ctr_written >= args.num_center:
+                break
+            im = cv2.imread(p, cv2.IMREAD_COLOR)
+            if im is None:
+                continue
+            out = make_center(im, args.imgsz)
+            op = out_dir / f"pos_ctr_{ctr_written:05d}.jpg"
+            cv2.imwrite(str(op), out, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+            written.append(str(op.resolve()))
+            ctr_written += 1
 
     # Write negatives
     for i in range(args.num_neg):
@@ -126,6 +148,7 @@ def main() -> int:
         f.write("\n".join(written))
 
     print(f"Wrote {len(written)} calibration images to {out_dir}")
+    print(f"  Off-center: {pos_written}  Centered: {ctr_written}  Negatives: {args.num_neg}")
     print(f"List file: {list_path} ({len(written)} lines)")
     return 0
 
