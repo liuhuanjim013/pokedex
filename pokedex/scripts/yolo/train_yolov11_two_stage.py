@@ -54,6 +54,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--det-run-name", type=str, default="pokemon_det1_yolo11n_256",
                         help="Detector run name")
 
+    # Detector augmentation controls (stronger defaults for off-center robustness)
+    parser.add_argument("--det-degrees", type=float, default=5.0, help="Random rotation degrees")
+    parser.add_argument("--det-translate", type=float, default=0.30, help="Translation fraction (0-1)")
+    parser.add_argument("--det-scale", type=float, default=0.50, help="Scale gain (0-1)")
+    parser.add_argument("--det-shear", type=float, default=0.0, help="Shear")
+    parser.add_argument("--det-flipud", type=float, default=0.0, help="Flip up-down prob")
+    parser.add_argument("--det-fliplr", type=float, default=0.5, help="Flip left-right prob")
+    parser.add_argument("--det-hsv-h", type=float, default=0.015, help="HSV-H jitter")
+    parser.add_argument("--det-hsv-s", type=float, default=0.70, help="HSV-S jitter")
+    parser.add_argument("--det-hsv-v", type=float, default=0.40, help="HSV-V jitter")
+    parser.add_argument("--det-mosaic", type=float, default=0.20, help="Mosaic probability")
+    parser.add_argument("--det-mixup", type=float, default=0.0, help="Mixup probability")
+
     parser.add_argument("--cls-model", type=str, default="yolo11n-cls.pt",
                         help="Ultralytics classifier model to start from")
     parser.add_argument("--cls-data", type=str, default="data/classify_dataset",
@@ -309,9 +322,11 @@ def main() -> None:
             det_train_cmd = (
                 f"{yolo_cli} detect train model={args.det_model} data={det_yaml_autogen} "
                 f"imgsz={args.det_imgsz} epochs={args.det_epochs} batch={args.det_batch} "
-                # Augmentations to improve off-center robustness
-                f"degrees=5 translate=0.20 scale=0.50 shear=0.0 flipud=0.0 fliplr=0.5 "
-                f"hsv_h=0.015 hsv_s=0.70 hsv_v=0.40 mosaic=0.10 mixup=0.0 "
+                # Augmentations to improve off-center robustness (CLI-controlled)
+                f"degrees={args.det_degrees} translate={args.det_translate} scale={args.det_scale} "
+                f"shear={args.det_shear} flipud={args.det_flipud} fliplr={args.det_fliplr} "
+                f"hsv_h={args.det_hsv_h} hsv_s={args.det_hsv_s} hsv_v={args.det_hsv_v} "
+                f"mosaic={args.det_mosaic} mixup={args.det_mixup} "
                 f"cos_lr=True project=runs name={args.det_run_name} exist_ok=True save_period=1"
             )
         run_cmd(det_train_cmd, logger)
