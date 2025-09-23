@@ -46,6 +46,17 @@ ${fail} && { echo "Aborting due to missing inputs."; exit 1; }
 
 mkdir -p "$OUT_DIR"
 
+# -------- Auto-generate detector calibration set if missing --------
+if [ ! -d "$DET_DIR" ] || [ ! -s "$DET_LIST" ]; then
+  echo "🧪 Building detector calibration set (off-center + negatives) ..."
+  python3 pokedex/models/maixcam/conversion_workspace/build_detector_calibration_set.py \
+    --src-images data/yolo_dataset/train/images \
+    --out-dir "$DET_DIR" \
+    --list-path "$DET_LIST" \
+    --imgsz 256 --num-pos 600 --num-neg 400 --seed 0 || {
+      echo "❌ Failed to build detector calibration set"; exit 1; }
+fi
+
 echo "✅ Detector ONNX: $DET_ONNX"
 echo "✅ Classifier ONNX: $CLS_ONNX"
 echo "✅ Det calib list: $DET_LIST (dir: $DET_DIR)"

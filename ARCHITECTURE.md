@@ -1956,6 +1956,29 @@ Objective: The detector must (1) reliably signal “no Pokémon present” and (
 
 Acceptance: CVI detector must output low confidence on negatives, and reasonable off-center boxes (IoU ≥ 0.30 vs PT/ONNX/GT) on positives.
 
+#### How to Create and Use the Calibration Set (Detector)
+
+1) Generate calibration images (off-center positives + negatives):
+
+```bash
+python pokedex/models/maixcam/conversion_workspace/build_detector_calibration_set.py \
+  --src-images data/yolo_dataset/train/images \
+  --out-dir data/calib_det \
+  --list-path data/calib_det_list.txt \
+  --imgsz 256 --num-pos 600 --num-neg 400 --seed 0
+```
+
+2) Convert models with TPU-MLIR (auto-builds the detector calibration set if missing):
+
+```bash
+bash pokedex/models/maixcam/conversion_workspace/run_tpu_mlir_two_stage_udocker.sh
+```
+
+Notes:
+- The converter script will create `data/calib_det` and `data/calib_det_list.txt` if they do not exist.
+- Detector calibration coverage is increased (input_num=768). Classifier is 512.
+- Ensure detector ONNX is up-to-date before converting (use `--export` in the two-stage training script).
+
 ### Option 3: Single-Stage with Graph-Level ArgMax ⚙️ **ADVANCED - REQUIRES EXPORT MODIFICATION**
 
 **When to Use**: Want single model, willing to modify export pipeline
