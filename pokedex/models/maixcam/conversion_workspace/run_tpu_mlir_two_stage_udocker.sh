@@ -116,7 +116,7 @@ if [ "$RUN_MODE" = "udocker" ]; then
     -e CHIP="$CHIP" -e DET_ONNX="$DET_ONNX" -e CLS_ONNX="$CLS_ONNX" \
     -e DET_LIST="$DET_LIST" -e DET_DIR="$DET_DIR" \
     -e CLS_LIST="$CLS_LIST" -e CLS_DIR="$CLS_DIR" \
-    -e OUT_DIR="$OUT_DIR" \
+    -e OUT_DIR="$OUT_DIR" -e HOST_PWD="$(pwd)" \
     -v "$(pwd):/workspace" "$CONTAINER_NAME" bash -lc)
 else
   echo "🐳 Using Docker runtime"
@@ -131,7 +131,7 @@ else
     -e CHIP="$CHIP" -e DET_ONNX="$DET_ONNX" -e CLS_ONNX="$CLS_ONNX" \
     -e DET_LIST="$DET_LIST" -e DET_DIR="$DET_DIR" \
     -e CLS_LIST="$CLS_LIST" -e CLS_DIR="$CLS_DIR" \
-    -e OUT_DIR="$OUT_DIR" \
+    -e OUT_DIR="$OUT_DIR" -e HOST_PWD="$(pwd)" \
     -v "$(pwd)":/workspace "$DOCKER_IMAGE" bash -lc)
 fi
 # Write container-side script to avoid host variable expansion issues
@@ -140,6 +140,18 @@ cat > "$TMP_SCRIPT" << 'INSIDE'
 set -euo pipefail
 cd /workspace
 echo "📦 Inside container: $(python3 -V)"
+echo "🔧 Normalizing calibration list paths for container mount"
+DET_LIST_WS="${DET_LIST}.workspace.txt"
+if [ -f "$DET_LIST" ]; then
+  if [ -n "${HOST_PWD:-}" ]; then
+    sed "s|${HOST_PWD}|/workspace|g" "$DET_LIST" > "$DET_LIST_WS" || cp "$DET_LIST" "$DET_LIST_WS"
+  else
+    cp "$DET_LIST" "$DET_LIST_WS"
+  fi
+else
+  echo "⚠️  DET_LIST not found inside container: $DET_LIST"
+  DET_LIST_WS="$DET_LIST"
+fi
 
 WHEEL="/workspace/pokedex/models/maixcam/conversion_workspace/tpu_mlir_packages/tpu_mlir-1.21.1-py3-none-any.whl"
 if python3 -c "import tpu_mlir" 2>/dev/null; then
@@ -172,7 +184,7 @@ $MT --model_name pokemon_det1 --model_def "$DET_ONNX" \
     --mlir pokemon_det1.mlir
 
 echo "🧮 Calibrate DET"
-$RC pokemon_det1.mlir --dataset "$DET_DIR" --data_list "$DET_LIST" --input_num 2048 \
+$RC pokemon_det1.mlir --dataset "$DET_DIR" --data_list "$DET_LIST_WS" --input_num 2048 \
     -o pokemon_det1_cali_table
 
 echo "🏗️  Deploy DET"
