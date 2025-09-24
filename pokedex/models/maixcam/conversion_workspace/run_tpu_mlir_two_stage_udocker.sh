@@ -93,8 +93,20 @@ if [ "$RUN_MODE" = "udocker" ]; then
   echo "🧹 Cleaning old container (if any)"
   udocker --allow-root rm "$CONTAINER_NAME" >/dev/null 2>&1 || true
 
-  echo "📥 Pulling $DOCKER_IMAGE"
-  udocker --allow-root pull "$DOCKER_IMAGE"
+  if udocker --allow-root images | grep -q "$DOCKER_IMAGE"; then
+    echo "📦 Using cached image $DOCKER_IMAGE"
+  else
+    echo "📥 Pulling $DOCKER_IMAGE"
+    if ! udocker --allow-root pull "$DOCKER_IMAGE"; then
+      echo "⚠️ Pull failed for $DOCKER_IMAGE, trying fallback tag sophgo/tpuc_dev:1.21.1"
+      if udocker --allow-root pull "sophgo/tpuc_dev:1.21.1"; then
+        DOCKER_IMAGE="sophgo/tpuc_dev:1.21.1"
+      else
+        echo "❌ Unable to pull TPU-MLIR image. Set DOCKER_IMAGE or install tpu-mlir locally."
+        exit 1
+      fi
+    fi
+  fi
 
   echo "🔧 Creating container $CONTAINER_NAME"
   udocker --allow-root create --name="$CONTAINER_NAME" "$DOCKER_IMAGE"
@@ -108,8 +120,12 @@ if [ "$RUN_MODE" = "udocker" ]; then
     -v "$(pwd):/workspace" "$CONTAINER_NAME" bash -lc)
 else
   echo "🐳 Using Docker runtime"
-  echo "📥 Pulling $DOCKER_IMAGE"
-  docker pull "$DOCKER_IMAGE"
+  if docker image inspect "$DOCKER_IMAGE" >/dev/null 2>&1; then
+    echo "📦 Using cached image $DOCKER_IMAGE"
+  else
+    echo "📥 Pulling $DOCKER_IMAGE"
+    docker pull "$DOCKER_IMAGE"
+  fi
   echo "🐍 Running conversion in container (docker)..."
   RUNTIME_CMD=(docker run --rm -e PYTHONUNBUFFERED=1 \
     -e CHIP="$CHIP" -e DET_ONNX="$DET_ONNX" -e CLS_ONNX="$CLS_ONNX" \
