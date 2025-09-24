@@ -172,7 +172,7 @@ $MT --model_name pokemon_det1 --model_def "$DET_ONNX" \
     --mlir pokemon_det1.mlir
 
 echo "🧮 Calibrate DET"
-$RC pokemon_det1.mlir --dataset "$DET_DIR" --input_list "$DET_LIST" --input_num 2048 \
+$RC pokemon_det1.mlir --dataset "$DET_DIR" --data_list "$DET_LIST" --input_num 2048 \
     -o pokemon_det1_cali_table
 
 echo "🏗️  Deploy DET"
