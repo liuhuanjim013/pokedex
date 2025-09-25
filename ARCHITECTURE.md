@@ -1899,6 +1899,133 @@ python scripts/yolo/relabel_for_detector.py \
 - ❌ Two models to manage
 - ❌ Slightly more complex pipeline
 
+### Detector Presence Verification (New Goal)
+
+To ensure the 1-class detector reliably signals the presence/absence of a Pokemon under off-center and partial-visibility conditions, we add a detector validation task across three backends (PyTorch, ONNX, CVI/TPU-MLIR):
+
+- Augment evaluation images to produce three variants per sample at detector input size (256×256):
+  - orig: resized original
+  - offcenter: object shrunk and placed off-center on a neutral background
+  - absent: uniform background (no object)
+- Batch detection by backend for speed: run all with PT, then ONNX, then CVI
+- Decide presence by score threshold (default conf ≥ 0.35)
+- Compare presence decisions across backends; when two or more signal presence, compute pairwise IoU and flag inconsistencies below IoU≥0.30
+- Record inputs/outputs per variant to facilitate debugging and CVI improvements on MaixCam
+
+Implementation reference: `models/maixcam/conversion_workspace/test_detector_triplet.py`.
+
+#### Training and Calibration Plan for Reliable Presence and Off-Center Bounding Boxes
+
+Objective: The detector must (1) reliably signal “no Pokémon present” and (2) output a correct off-center bounding box to guide users to center the camera, thereby improving downstream classification.
+
+1) Detector Dataset and Training (YOLO11n, nc=1, imgsz=256)
+- Positive samples: reuse existing Pokémon images and labels, relabeled to class 0 (pokemon).
+- Negative samples (new): synthetic and natural negatives with empty labels to teach absence.
+  - Synthetic: solid gray/white/colored canvases, Gaussian/noise backgrounds, gradients.
+  - Optional natural: backgrounds from non-Pokémon corpora or blurred dataset crops with labels removed.
+- Augmentations to improve off-center robustness:
+  - translate=0.20, scale=0.50, degrees=5, fliplr=0.5, hsv jitter (h=0.015, s=0.70, v=0.40), mosaic=0.10, mixup=0.0
+  - Intuition: shrink-and-shift forces network to localize off-center Pokémon; small mosaic improves diversity without destabilizing training.
+- Presence threshold policy: default conf ≥ 0.35; can be tuned post-quantization.
+
+2) Calibration Dataset for CVI (TPU-MLIR, INT8)
+- Calibration set must match deployment domain, not just centered crops:
+  - Include off-center/shrunk positives (similar to training augmentations).
+  - Include negatives (solid colors, colored/noise/gradient backgrounds, optional natural backgrounds).
+  - Mix ~60% positive, ~40% negative to calibrate score dynamic range.
+- Increase calibration coverage:
+  - Detector input_num: 768 (was 256)
+  - Classifier input_num: 512 (was 256)
+
+3) Evaluation and Thresholding
+- Use `test_detector_triplet.py` to validate across PT/ONNX/CVI on:
+  - orig (center/large), offcenter (shrink-and-shift), absent (background only)
+- Metrics:
+  - Presence accuracy on negatives (CVI conf < threshold)
+  - IoU on off-center positives vs PT/ONNX and synthetic GT
+  - Consistency PT↔ONNX↔CVI (IoU ≥ 0.30 when present)
+- Tune `conf_threshold` in `pokemon_det1.mud` if needed.
+
+4) Script Changes
+- Training: `pokedex/scripts/yolo/train_yolov11_two_stage.py`
+  - Adds empty-label negatives generation per split (train/val/test)
+  - Enables stronger translate/scale/hsv and light mosaic, disables mixup
+- Conversion: `pokedex/models/maixcam/conversion_workspace/run_tpu_mlir_two_stage_udocker.sh`
+  - Raises detector calibration input_num to 768 and classifier to 512
+  - Expect `DET_DIR` to contain off-center and negative samples reflected in `DET_LIST`
+
+Acceptance: CVI detector must output low confidence on negatives, and reasonable off-center boxes (IoU ≥ 0.30 vs PT/ONNX/GT) on positives.
+
+#### How to Create and Use the Calibration Set (Detector)
+
+1) Generate calibration images (off-center positives + negatives):
+
+```bash
+python pokedex/models/maixcam/conversion_workspace/build_detector_calibration_set.py \
+  --src-images data/yolo_dataset/train/images \
+  --out-dir data/calib_det \
+  --list-path data/calib_det_list.txt \
+  --imgsz 256 --num-pos 600 --num-neg 400 --seed 0
+```
+
+2) Convert models with TPU-MLIR (auto-builds the detector calibration set if missing):
+
+```bash
+bash pokedex/models/maixcam/conversion_workspace/run_tpu_mlir_two_stage_udocker.sh
+```
+
+Notes:
+- The converter script will create `data/calib_det` and `data/calib_det_list.txt` if they do not exist.
+- Detector calibration coverage is increased (input_num=768). Classifier is 512.
+- Ensure detector ONNX is up-to-date before converting (use `--export` in the two-stage training script).
+
+### Two-Stage Detector Validation – Recent Changes and Findings (since 6e2c4f7)
+
+What we changed
+- Detector-focused triplet test: Added `test_detector_triplet.py` to compare PT, ONNX, and CVI on the same images; added off-center and absent variants; batched per-backend runs; robust CVI runner (docker/udocker fallback, cached image usage, path normalization of `data_list`).
+- Calibration generation: Implemented `build_detector_calibration_set.py` producing off-center positives, centered positives, and negatives; default size now larger (≈2000 off-center, 500 centered, 1500 negatives).
+- Converter improvements: Raised detector calibration coverage (up to 2048); added `--data_list` support; automatic list path rewriting to container mount; resilient image pulling and caching.
+- Detector training: Added negatives to the training dataset and stronger augmentations (translate up to 0.30+, mosaic 0.20; exposed via CLI). Export paths unified to `models/maixcam/exports/`.
+
+What we observed
+- PT/ONNX behavior: Correct on orig and off-center; absent suppressed at presence threshold ≥0.6.
+- CVI (pre-calibration changes): Good on orig; absent originally fired (neutral ~0.5), fixed by threshold; off-center produced a small fixed corner box (neutral score) → domain mismatch.
+- CVI (after larger, mixed calibration and list-driven calibration):
+  - Orig: OK (IoU ≈ 0.96–0.97 vs PT/ONNX)
+  - Absent: suppressed (score ~0.50; with presence-thr ≥0.6 treated as absent)
+  - Off-center: still neutral (~0.50) and not selected → CVI misses small/off-center objects despite PT/ONNX success.
+
+Interpretation
+- The detector was trained to localize Pokémon; PT/ONNX generalize to off-center cases. Post-INT8 quantization, the CVI model’s class/object scores for small/off-center targets collapse toward zero (sigmoid ~0.5), indicating calibration still does not sufficiently cover the activation distribution for small/off-center layouts.
+- MUD `conf_threshold` does not affect docker `model_runner`; presence thresholding must be handled in tests; on device, MUD threshold can be tuned.
+
+Deep thinking: what to try next (minimal risk → higher impact)
+1) Calibration method search (quantization sensitivity)
+   - Try KL divergence calibration (often rescues flat logits):
+     - `CALI_METHOD=use_kl` in the converter environment.
+   - If still flat, try percentile histogram: `CALI_METHOD=use_percentile9999`.
+   - Keep input_num high (≥2048) and ensure the calibration set emphasizes small-scale/off-center crops (we already do, but consider shrinking down to 0.30 ratio as well).
+
+2) Expand calibration coverage for small objects
+   - Regenerate calibration with more aggressive shrink ranges (e.g., scale 0.30–0.60).
+   - Increase off-center positives to 3000–4000 and negatives accordingly to maintain balance.
+
+3) Training bias toward small/off-center
+   - Increase detector `translate` to 0.35–0.40 and `mosaic` to 0.30 to diversify object location/scale during training.
+   - Optionally introduce mild `perspective` (e.g., 0.0005–0.001) to increase spatial variance without destabilizing training.
+   - Maintain negatives; ensure validation includes off-center samples to track recall.
+
+4) Postprocessing consistency
+   - Ensure score uses `obj * cls` if the head exports separate objectness and class channels (tests already do this). Confirm device runtime mirrors this. If objectness exists in the CVI head, use the product for presence decisions.
+
+5) Fallback thresholds for device UI
+   - On-device MUD `conf_threshold` can be set to 0.55–0.60 to avoid false positives when absent. This does not fix recall but stabilizes UX while model is improved.
+
+Success criteria for the next round
+- CVI: Off-center variants detected with presence=1 and reasonable boxes (IoU ≥ 0.30 vs PT/ONNX) at presence threshold 0.6.
+- CVI: Absent variants remain suppressed at the same threshold.
+- No regression on orig images.
+
 ### Option 3: Single-Stage with Graph-Level ArgMax ⚙️ **ADVANCED - REQUIRES EXPORT MODIFICATION**
 
 **When to Use**: Want single model, willing to modify export pipeline

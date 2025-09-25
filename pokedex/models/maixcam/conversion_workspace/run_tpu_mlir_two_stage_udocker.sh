@@ -11,8 +11,8 @@ CONTAINER_NAME="tpu_mlir_two_stage"
 CHIP="cv181x"   # Default target per MaixCam doc; override with CHIP env if needed
 
 # Defaults use your latest run dirs; override via env or args if needed
-DET_ONNX_DEFAULT="runs/pokemon_det1_yolo11n_2565/weights/best.onnx"
-CLS_ONNX_DEFAULT="runs/pokemon_cls1025_yolo11n_2242/weights/best.onnx"
+DET_ONNX_DEFAULT="models/maixcam/exports/best_det.onnx"
+CLS_ONNX_DEFAULT="models/maixcam/exports/best_cls.onnx"
 
 DET_LIST_DEFAULT="data/calib_det_list.txt"
 DET_DIR_DEFAULT="data/calib_det"
@@ -46,11 +46,25 @@ ${fail} && { echo "Aborting due to missing inputs."; exit 1; }
 
 mkdir -p "$OUT_DIR"
 
+# -------- Auto-generate detector calibration set if missing --------
+if [ ! -d "$DET_DIR" ] || [ ! -s "$DET_LIST" ]; then
+  echo "🧪 Building detector calibration set (off-center + negatives) ..."
+  python3 pokedex/models/maixcam/conversion_workspace/build_detector_calibration_set.py \
+    --src-images data/yolo_dataset/train/images \
+    --out-dir "$DET_DIR" \
+    --list-path "$DET_LIST" \
+    --imgsz 256 --num-pos 600 --num-neg 400 --seed 0 || {
+      echo "❌ Failed to build detector calibration set"; exit 1; }
+fi
+
 echo "✅ Detector ONNX: $DET_ONNX"
 echo "✅ Classifier ONNX: $CLS_ONNX"
 echo "✅ Det calib list: $DET_LIST (dir: $DET_DIR)"
 echo "✅ Cls calib list: $CLS_LIST (dir: $CLS_DIR)"
 echo "📁 Output dir: $OUT_DIR"
+if [ -f "$DET_LIST" ]; then
+  echo "🧮 Det calib count: $(wc -l < "$DET_LIST" | tr -d ' ') entries"
+fi
 
 # -------- choose runtime: docker > udocker --------
 RUN_MODE="udocker"
@@ -79,8 +93,20 @@ if [ "$RUN_MODE" = "udocker" ]; then
   echo "🧹 Cleaning old container (if any)"
   udocker --allow-root rm "$CONTAINER_NAME" >/dev/null 2>&1 || true
 
-  echo "📥 Pulling $DOCKER_IMAGE"
-  udocker --allow-root pull "$DOCKER_IMAGE"
+  if udocker --allow-root images | grep -q "$DOCKER_IMAGE"; then
+    echo "📦 Using cached image $DOCKER_IMAGE"
+  else
+    echo "📥 Pulling $DOCKER_IMAGE"
+    if ! udocker --allow-root pull "$DOCKER_IMAGE"; then
+      echo "⚠️ Pull failed for $DOCKER_IMAGE, trying fallback tag sophgo/tpuc_dev:1.21.1"
+      if udocker --allow-root pull "sophgo/tpuc_dev:1.21.1"; then
+        DOCKER_IMAGE="sophgo/tpuc_dev:1.21.1"
+      else
+        echo "❌ Unable to pull TPU-MLIR image. Set DOCKER_IMAGE or install tpu-mlir locally."
+        exit 1
+      fi
+    fi
+  fi
 
   echo "🔧 Creating container $CONTAINER_NAME"
   udocker --allow-root create --name="$CONTAINER_NAME" "$DOCKER_IMAGE"
@@ -90,18 +116,22 @@ if [ "$RUN_MODE" = "udocker" ]; then
     -e CHIP="$CHIP" -e DET_ONNX="$DET_ONNX" -e CLS_ONNX="$CLS_ONNX" \
     -e DET_LIST="$DET_LIST" -e DET_DIR="$DET_DIR" \
     -e CLS_LIST="$CLS_LIST" -e CLS_DIR="$CLS_DIR" \
-    -e OUT_DIR="$OUT_DIR" \
+    -e OUT_DIR="$OUT_DIR" -e HOST_PWD="$(pwd)" \
     -v "$(pwd):/workspace" "$CONTAINER_NAME" bash -lc)
 else
   echo "🐳 Using Docker runtime"
-  echo "📥 Pulling $DOCKER_IMAGE"
-  docker pull "$DOCKER_IMAGE"
+  if docker image inspect "$DOCKER_IMAGE" >/dev/null 2>&1; then
+    echo "📦 Using cached image $DOCKER_IMAGE"
+  else
+    echo "📥 Pulling $DOCKER_IMAGE"
+    docker pull "$DOCKER_IMAGE"
+  fi
   echo "🐍 Running conversion in container (docker)..."
   RUNTIME_CMD=(docker run --rm -e PYTHONUNBUFFERED=1 \
     -e CHIP="$CHIP" -e DET_ONNX="$DET_ONNX" -e CLS_ONNX="$CLS_ONNX" \
     -e DET_LIST="$DET_LIST" -e DET_DIR="$DET_DIR" \
     -e CLS_LIST="$CLS_LIST" -e CLS_DIR="$CLS_DIR" \
-    -e OUT_DIR="$OUT_DIR" \
+    -e OUT_DIR="$OUT_DIR" -e HOST_PWD="$(pwd)" \
     -v "$(pwd)":/workspace "$DOCKER_IMAGE" bash -lc)
 fi
 # Write container-side script to avoid host variable expansion issues
@@ -110,6 +140,18 @@ cat > "$TMP_SCRIPT" << 'INSIDE'
 set -euo pipefail
 cd /workspace
 echo "📦 Inside container: $(python3 -V)"
+echo "🔧 Normalizing calibration list paths for container mount"
+DET_LIST_WS="${DET_LIST}.workspace.txt"
+if [ -f "$DET_LIST" ]; then
+  if [ -n "${HOST_PWD:-}" ]; then
+    sed "s|${HOST_PWD}|/workspace|g" "$DET_LIST" > "$DET_LIST_WS" || cp "$DET_LIST" "$DET_LIST_WS"
+  else
+    cp "$DET_LIST" "$DET_LIST_WS"
+  fi
+else
+  echo "⚠️  DET_LIST not found inside container: $DET_LIST"
+  DET_LIST_WS="$DET_LIST"
+fi
 
 WHEEL="/workspace/pokedex/models/maixcam/conversion_workspace/tpu_mlir_packages/tpu_mlir-1.21.1-py3-none-any.whl"
 if python3 -c "import tpu_mlir" 2>/dev/null; then
@@ -142,7 +184,7 @@ $MT --model_name pokemon_det1 --model_def "$DET_ONNX" \
     --mlir pokemon_det1.mlir
 
 echo "🧮 Calibrate DET"
-$RC pokemon_det1.mlir --dataset "$DET_DIR" --input_num 256 \
+$RC pokemon_det1.mlir --dataset "$DET_DIR" --data_list "$DET_LIST_WS" --input_num 2048 \
     -o pokemon_det1_cali_table
 
 echo "🏗️  Deploy DET"
@@ -158,7 +200,7 @@ $MT --model_name pokemon_cls1025 --model_def "$CLS_ONNX" \
     --mlir pokemon_cls1025.mlir
 
 echo "🧮 Calibrate CLS"
-$RC pokemon_cls1025.mlir --dataset "$CLS_DIR" --input_num 256 \
+$RC pokemon_cls1025.mlir --dataset "$CLS_DIR" --input_num 512 \
     -o pokemon_cls1025_cali_table
 
 echo "🏗️  Deploy CLS"

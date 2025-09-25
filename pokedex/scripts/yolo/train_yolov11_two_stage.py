@@ -54,6 +54,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--det-run-name", type=str, default="pokemon_det1_yolo11n_256",
                         help="Detector run name")
 
+    # Detector augmentation controls (stronger defaults for off-center robustness)
+    parser.add_argument("--det-degrees", type=float, default=5.0, help="Random rotation degrees")
+    parser.add_argument("--det-translate", type=float, default=0.30, help="Translation fraction (0-1)")
+    parser.add_argument("--det-scale", type=float, default=0.50, help="Scale gain (0-1)")
+    parser.add_argument("--det-shear", type=float, default=0.0, help="Shear")
+    parser.add_argument("--det-flipud", type=float, default=0.0, help="Flip up-down prob")
+    parser.add_argument("--det-fliplr", type=float, default=0.5, help="Flip left-right prob")
+    parser.add_argument("--det-hsv-h", type=float, default=0.015, help="HSV-H jitter")
+    parser.add_argument("--det-hsv-s", type=float, default=0.70, help="HSV-S jitter")
+    parser.add_argument("--det-hsv-v", type=float, default=0.40, help="HSV-V jitter")
+    parser.add_argument("--det-mosaic", type=float, default=0.20, help="Mosaic probability")
+    parser.add_argument("--det-mixup", type=float, default=0.0, help="Mixup probability")
+
     parser.add_argument("--cls-model", type=str, default="yolo11n-cls.pt",
                         help="Ultralytics classifier model to start from")
     parser.add_argument("--cls-data", type=str, default="data/classify_dataset",
@@ -70,30 +83,39 @@ def parse_args() -> argparse.Namespace:
                         help="Directory to copy exports into")
     parser.add_argument("--no-resume", action="store_true", help="Disable auto-resume if checkpoints exist")
     return parser.parse_args()
+
+
+def _yolo_cli() -> str:
+    """Return the YOLO CLI launcher. Prefer 'yolo' if on PATH, else 'python -m ultralytics'."""
+    if shutil.which("yolo"):
+        return "yolo"
+    # Fallback to python -m ultralytics
+    return f"{sys.executable} -m ultralytics"
 def _class_dir_name(pokemon_id: str) -> str:
     name = POKEMON_NAMES.get(pokemon_id, None)
     return f"{pokemon_id}_{name}" if name else pokemon_id
 
 
 def _find_latest_run_dir(task: str, base_name: str) -> Path:
-    """Find an existing Ultralytics run dir that matches base_name or base_name<idx> under runs/<task>/.
+    """Find an existing Ultralytics run dir matching base_name (or base_name*) under runs/ and runs/<task>/.
 
     Returns Path('') if none found.
     """
-    task_root = Path("runs") / task
-    if not task_root.exists():
-        return Path("")
-    # Exact match first
-    exact = task_root / base_name
-    if exact.exists():
-        return exact
-    # Fuzzy match: base_name, base_name2, base_name3 ... pick most recent mtime
+    search_roots = [Path("runs"), Path("runs") / task]
     candidates = []
-    for d in task_root.iterdir():
-        if not d.is_dir():
+    for root in search_roots:
+        if not root.exists():
             continue
-        if d.name == base_name or d.name.startswith(base_name):
-            candidates.append((d.stat().st_mtime, d))
+        # Exact match first
+        exact = root / base_name
+        if exact.exists():
+            candidates.append((exact.stat().st_mtime, exact))
+        # Fuzzy matches
+        for d in root.iterdir():
+            if not d.is_dir():
+                continue
+            if d.name == base_name or d.name.startswith(base_name):
+                candidates.append((d.stat().st_mtime, d))
     if not candidates:
         return Path("")
     candidates.sort(key=lambda x: x[0], reverse=True)
@@ -200,6 +222,56 @@ def ensure_det1_dataset(yolo_root: Path, det_root: Path, logger: logging.Logger)
             except Exception as e:
                 logger.warning(f"Failed to rewrite label {lbl_path}: {e}")
 
+        # Add synthetic negatives (empty labels) to improve presence detection
+        try:
+            from PIL import Image
+            import numpy as np
+        except Exception as e:
+            logger.warning(f"PIL/numpy not available for negative generation: {e}")
+            continue
+
+        def _save_jpg(img_arr: np.ndarray, out_path: Path) -> None:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            img = Image.fromarray(img_arr.astype(np.uint8), mode="RGB")
+            img.save(str(out_path), format="JPEG", quality=90)
+
+        # target size close to detector input; Ultralytics will resize as needed
+        size = 256
+        rng = np.random.default_rng(2025)
+        if split == "train":
+            num_negs = 500
+        elif split == "validation":
+            num_negs = 200
+        else:
+            num_negs = 200
+
+        logger.info(f"Generating {num_negs} negative images for split '{split}' …")
+        for i in range(num_negs):
+            mode = i % 4
+            if mode == 0:
+                # solid gray
+                arr = np.full((size, size, 3), 127, dtype=np.uint8)
+            elif mode == 1:
+                # solid random color
+                color = rng.integers(0, 256, size=3, dtype=np.uint8)
+                arr = np.tile(color[None, None, :], (size, size, 1))
+            elif mode == 2:
+                # gaussian noise
+                arr = rng.normal(loc=128, scale=40, size=(size, size, 3)).clip(0, 255).astype(np.uint8)
+            else:
+                # horizontal gradient
+                x = np.linspace(0, 255, size, dtype=np.uint8)
+                arr = np.dstack([np.tile(x, (size, 1)), np.full((size, size), 128, np.uint8), np.flipud(np.tile(x, (size, 1)))])
+
+            neg_stem = f"neg_{i:05d}"
+            out_img = dst_img_dir / f"{neg_stem}.jpg"
+            out_lbl = dst_lbl_dir / f"{neg_stem}.txt"
+            if not out_img.exists():
+                _save_jpg(arr, out_img)
+            if not out_lbl.exists():
+                with open(out_lbl, "w", encoding="utf-8") as f:
+                    f.write("")  # empty label => no objects
+
 
 def write_det1_yaml(template_yaml: Path, out_yaml: Path, det_root: Path, logger: logging.Logger) -> None:
     """Write a detector YAML pointing to det_root using the known subpaths."""
@@ -232,36 +304,46 @@ def main() -> None:
     det_yaml_autogen = Path("configs/yolov11/pokemon_det1_autogen.yaml")
     write_det1_yaml(Path(args.det_data), det_yaml_autogen, det_out_root, logger)
 
-    # Build detector train command with auto-resume if last.pt exists
-    # Resolve existing run directory (handles name, name2, ...)
+    # Build detector train/export flow with resume/skip logic
     resolved_det_dir = _find_latest_run_dir("detect", args.det_run_name)
-    det_run_dir = resolved_det_dir if resolved_det_dir else (Path("runs") / "detect" / args.det_run_name)
+    det_run_dir = resolved_det_dir if resolved_det_dir else (Path("runs") / args.det_run_name)
     det_last = det_run_dir / "weights" / "last.pt"
-    if det_last.exists() and not args.no_resume:
-        det_train_cmd = (
-            f"yolo detect train resume=True project=runs name={det_run_dir.name} exist_ok=True save_period=1"
-        )
-    else:
-        det_train_cmd = (
-            f"yolo detect train model={args.det_model} data={det_yaml_autogen} "
-            f"imgsz={args.det_imgsz} epochs={args.det_epochs} batch={args.det_batch} "
-            f"cos_lr=True project=runs name={args.det_run_name} exist_ok=True save_period=1"
-        )
-    run_cmd(det_train_cmd, logger)
+    det_best_path = det_run_dir / "weights" / "best.pt"
+    yolo_cli = _yolo_cli()
 
-    det_best = f"runs/detect/{det_run_dir.name}/weights/best.pt"
-    if not Path(det_best).exists():
-        # fallback to default Ultralytics path
-        det_best = "runs/detect/train/weights/best.pt"
+    if args.export and det_best_path.exists():
+        logger.info(f"Detector best.pt found at {det_best_path}, skipping training and exporting only.")
+    else:
+        if det_last.exists() and not args.no_resume:
+            det_train_cmd = (
+                f"{yolo_cli} detect train resume=True project=runs name={det_run_dir.name} exist_ok=True save_period=1"
+            )
+        else:
+            det_train_cmd = (
+                f"{yolo_cli} detect train model={args.det_model} data={det_yaml_autogen} "
+                f"imgsz={args.det_imgsz} epochs={args.det_epochs} batch={args.det_batch} "
+                # Augmentations to improve off-center robustness (CLI-controlled)
+                f"degrees={args.det_degrees} translate={args.det_translate} scale={args.det_scale} "
+                f"shear={args.det_shear} flipud={args.det_flipud} fliplr={args.det_fliplr} "
+                f"hsv_h={args.det_hsv_h} hsv_s={args.det_hsv_s} hsv_v={args.det_hsv_v} "
+                f"mosaic={args.det_mosaic} mixup={args.det_mixup} "
+                f"cos_lr=True project=runs name={args.det_run_name} exist_ok=True save_period=1"
+            )
+        run_cmd(det_train_cmd, logger)
+        # refresh paths in case Ultralytics created a new indexed run dir
+        det_run_dir = _find_latest_run_dir("detect", args.det_run_name) or det_run_dir
+        det_best_path = (det_run_dir / "weights" / "best.pt")
 
     if args.export:
+        # fallback if best not found
+        det_best_str = str(det_best_path if det_best_path.exists() else Path("runs/detect/train/weights/best.pt"))
         det_export_cmd = (
-            f"yolo export model={det_best} format=onnx opset={args.opset} "
+            f"{yolo_cli} export model={det_best_str} format=onnx opset={args.opset} "
             f"imgsz={args.det_imgsz} dynamic=False simplify=True"
         )
         run_cmd(det_export_cmd, logger)
 
-        det_onnx = Path(det_best).with_suffix(".onnx")
+        det_onnx = Path(det_best_str).with_suffix(".onnx")
         if det_onnx.exists():
             run_cmd(f"cp {det_onnx} {os.path.join(args.outdir, 'best_det.onnx')}", logger)
 
@@ -272,34 +354,37 @@ def main() -> None:
     except Exception as e:
         logger.warning(f"Failed to auto-build classification dataset: {e}")
 
-    # Build classifier train command with auto-resume if last.pt exists
+    # Build classifier train/export flow with resume/skip logic
     resolved_cls_dir = _find_latest_run_dir("classify", args.cls_run_name)
-    cls_run_dir = resolved_cls_dir if resolved_cls_dir else (Path("runs") / "classify" / args.cls_run_name)
+    cls_run_dir = resolved_cls_dir if resolved_cls_dir else (Path("runs") / args.cls_run_name)
     cls_last = cls_run_dir / "weights" / "last.pt"
-    if cls_last.exists() and not args.no_resume:
-        cls_train_cmd = (
-            f"yolo classify train resume=True project=runs name={cls_run_dir.name} exist_ok=True save_period=1"
-        )
+    cls_best_path = cls_run_dir / "weights" / "best.pt"
+    if args.export and cls_best_path.exists():
+        logger.info(f"Classifier best.pt found at {cls_best_path}, skipping training and exporting only.")
     else:
-        cls_train_cmd = (
-            f"yolo classify train model={args.cls_model} data={args.cls_data} "
-            f"imgsz={args.cls_imgsz} epochs={args.cls_epochs} batch={args.cls_batch} "
-            f"cos_lr=True project=runs name={args.cls_run_name} exist_ok=True save_period=1"
-        )
-    run_cmd(cls_train_cmd, logger)
-
-    cls_best = f"runs/classify/{cls_run_dir.name}/weights/best.pt"
-    if not Path(cls_best).exists():
-        cls_best = "runs/classify/train/weights/best.pt"
+        if cls_last.exists() and not args.no_resume:
+            cls_train_cmd = (
+                f"{yolo_cli} classify train resume=True project=runs name={cls_run_dir.name} exist_ok=True save_period=1"
+            )
+        else:
+            cls_train_cmd = (
+                f"{yolo_cli} classify train model={args.cls_model} data={args.cls_data} "
+                f"imgsz={args.cls_imgsz} epochs={args.cls_epochs} batch={args.cls_batch} "
+                f"cos_lr=True project=runs name={args.cls_run_name} exist_ok=True save_period=1"
+            )
+        run_cmd(cls_train_cmd, logger)
+        cls_run_dir = _find_latest_run_dir("classify", args.cls_run_name) or cls_run_dir
+        cls_best_path = (cls_run_dir / "weights" / "best.pt")
 
     if args.export:
+        cls_best_str = str(cls_best_path if cls_best_path.exists() else Path("runs/classify/train/weights/best.pt"))
         cls_export_cmd = (
-            f"yolo export model={cls_best} format=onnx opset={args.opset} "
+            f"{yolo_cli} export model={cls_best_str} format=onnx opset={args.opset} "
             f"imgsz={args.cls_imgsz} dynamic=False simplify=True"
         )
         run_cmd(cls_export_cmd, logger)
 
-        cls_onnx = Path(cls_best).with_suffix(".onnx")
+        cls_onnx = Path(cls_best_str).with_suffix(".onnx")
         if cls_onnx.exists():
             run_cmd(f"cp {cls_onnx} {os.path.join(args.outdir, 'best_cls.onnx')}", logger)
 
