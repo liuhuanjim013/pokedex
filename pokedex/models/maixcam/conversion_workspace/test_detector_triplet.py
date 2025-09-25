@@ -276,10 +276,17 @@ class CVIRunner:
                     subprocess.run(["udocker", "--allow-root", "setup"], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 except Exception:
                     pass
-                # Pull once
-                pr = subprocess.run(["udocker", "--allow-root", "pull", self.image], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                if pr.returncode != 0:
-                    raise RuntimeError(f"udocker pull failed for image '{self.image}': {pr.stderr.strip() or pr.stdout.strip()}")
+                # Use cached image if available; else pull with fallback
+                has_image = subprocess.run(["udocker", "--allow-root", "images"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                cached = (has_image.returncode == 0 and self.image in has_image.stdout)
+                if not cached:
+                    pr = subprocess.run(["udocker", "--allow-root", "pull", self.image], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    if pr.returncode != 0:
+                        fallback = os.environ.get("TPU_MLIR_IMAGE", "sophgo/tpuc_dev:1.21.1")
+                        pr2 = subprocess.run(["udocker", "--allow-root", "pull", fallback], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                        if pr2.returncode != 0:
+                            raise RuntimeError(f"udocker pull failed for image '{self.image}': {pr.stderr.strip() or pr.stdout.strip()}\nTried fallback '{fallback}' and failed: {pr2.stderr.strip() or pr2.stdout.strip()}\nSet TPU_MLIR_IMAGE to an accessible tag or install model_runner on host.")
+                        self.image = fallback
                 # Create named container once
                 self.cname = f"tpuc_dev_{os.getpid()}"
                 # Clean stale
