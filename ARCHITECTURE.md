@@ -1979,6 +1979,53 @@ Notes:
 - Detector calibration coverage is increased (input_num=768). Classifier is 512.
 - Ensure detector ONNX is up-to-date before converting (use `--export` in the two-stage training script).
 
+### Two-Stage Detector Validation – Recent Changes and Findings (since 6e2c4f7)
+
+What we changed
+- Detector-focused triplet test: Added `test_detector_triplet.py` to compare PT, ONNX, and CVI on the same images; added off-center and absent variants; batched per-backend runs; robust CVI runner (docker/udocker fallback, cached image usage, path normalization of `data_list`).
+- Calibration generation: Implemented `build_detector_calibration_set.py` producing off-center positives, centered positives, and negatives; default size now larger (≈2000 off-center, 500 centered, 1500 negatives).
+- Converter improvements: Raised detector calibration coverage (up to 2048); added `--data_list` support; automatic list path rewriting to container mount; resilient image pulling and caching.
+- Detector training: Added negatives to the training dataset and stronger augmentations (translate up to 0.30+, mosaic 0.20; exposed via CLI). Export paths unified to `models/maixcam/exports/`.
+
+What we observed
+- PT/ONNX behavior: Correct on orig and off-center; absent suppressed at presence threshold ≥0.6.
+- CVI (pre-calibration changes): Good on orig; absent originally fired (neutral ~0.5), fixed by threshold; off-center produced a small fixed corner box (neutral score) → domain mismatch.
+- CVI (after larger, mixed calibration and list-driven calibration):
+  - Orig: OK (IoU ≈ 0.96–0.97 vs PT/ONNX)
+  - Absent: suppressed (score ~0.50; with presence-thr ≥0.6 treated as absent)
+  - Off-center: still neutral (~0.50) and not selected → CVI misses small/off-center objects despite PT/ONNX success.
+
+Interpretation
+- The detector was trained to localize Pokémon; PT/ONNX generalize to off-center cases. Post-INT8 quantization, the CVI model’s class/object scores for small/off-center targets collapse toward zero (sigmoid ~0.5), indicating calibration still does not sufficiently cover the activation distribution for small/off-center layouts.
+- MUD `conf_threshold` does not affect docker `model_runner`; presence thresholding must be handled in tests; on device, MUD threshold can be tuned.
+
+Deep thinking: what to try next (minimal risk → higher impact)
+1) Calibration method search (quantization sensitivity)
+   - Try KL divergence calibration (often rescues flat logits):
+     - `CALI_METHOD=use_kl` in the converter environment.
+   - If still flat, try percentile histogram: `CALI_METHOD=use_percentile9999`.
+   - Keep input_num high (≥2048) and ensure the calibration set emphasizes small-scale/off-center crops (we already do, but consider shrinking down to 0.30 ratio as well).
+
+2) Expand calibration coverage for small objects
+   - Regenerate calibration with more aggressive shrink ranges (e.g., scale 0.30–0.60).
+   - Increase off-center positives to 3000–4000 and negatives accordingly to maintain balance.
+
+3) Training bias toward small/off-center
+   - Increase detector `translate` to 0.35–0.40 and `mosaic` to 0.30 to diversify object location/scale during training.
+   - Optionally introduce mild `perspective` (e.g., 0.0005–0.001) to increase spatial variance without destabilizing training.
+   - Maintain negatives; ensure validation includes off-center samples to track recall.
+
+4) Postprocessing consistency
+   - Ensure score uses `obj * cls` if the head exports separate objectness and class channels (tests already do this). Confirm device runtime mirrors this. If objectness exists in the CVI head, use the product for presence decisions.
+
+5) Fallback thresholds for device UI
+   - On-device MUD `conf_threshold` can be set to 0.55–0.60 to avoid false positives when absent. This does not fix recall but stabilizes UX while model is improved.
+
+Success criteria for the next round
+- CVI: Off-center variants detected with presence=1 and reasonable boxes (IoU ≥ 0.30 vs PT/ONNX) at presence threshold 0.6.
+- CVI: Absent variants remain suppressed at the same threshold.
+- No regression on orig images.
+
 ### Option 3: Single-Stage with Graph-Level ArgMax ⚙️ **ADVANCED - REQUIRES EXPORT MODIFICATION**
 
 **When to Use**: Want single model, willing to modify export pipeline
